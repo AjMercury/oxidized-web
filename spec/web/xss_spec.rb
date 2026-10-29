@@ -15,6 +15,16 @@ describe Oxidized::API::WebApp do
   end
 
   describe 'reflected XSS prevention' do
+    it 'escapes script markup in the current configuration viewer' do
+      @nodes.expects(:fetch).with('router1', nil).returns("<script>alert(1)</script>\n")
+
+      get '/node/configuration?node_full=router1'
+
+      _(last_response.ok?).must_equal true
+      _(last_response.body).must_include('&lt;script&gt;alert(1)&lt;/script&gt;')
+      _(last_response.body).wont_include('<script>alert(1)</script>')
+    end
+
     # Attack scenarios basing on the node name are highly hypothetical. The node
     # name is used to look up the node in Oxidized before the view is rendered,
     # so a non-existing node raises NodeNotFound and the payload is never
@@ -87,6 +97,11 @@ describe Oxidized::API::WebApp do
       node.stubs(:name).returns(malicious)
       node.stubs(:stats).returns(stats)
       @nodes.stubs(:each).yields(node)
+      @nodes.stubs(:list).returns(
+        [{ name: malicious, full_name: malicious, ip: '192.0.2.10', model: 'ios', group: 'default', vars: {},
+           last: nil }]
+      )
+      @nodes.stubs(:version).returns([])
 
       get '/nodes/stats'
 
@@ -110,7 +125,7 @@ describe Oxidized::API::WebApp do
     end
 
     it 'encodes script tags in diff output on /node/version/diffs' do
-      payload_patch = "- <script>alert(1)</script>\n+ safe line\n"
+      payload_patch = "@@ -1 +1 @@\n- <script>alert(1)</script>\n+ safe line\n"
       versions = [{ oid: 'C006', time: Time.parse('2025-02-05 19:49:00 +0100') }]
       @nodes.expects(:version).with('router1', nil).returns(versions)
       @nodes.expects(:get_diff).with('router1', nil, 'C006', nil).returns(

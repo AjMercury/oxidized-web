@@ -102,6 +102,42 @@ describe Oxidized::API::WebApp do
       _(last_response.body).must_include('/node/version?node_full=group1/sw5')
     end
 
+    it 'redacts sensitive metadata and separates attempt, revision, and change timestamps' do
+      attempt_time = Time.parse('2026-10-29 12:00:00 +0330')
+      revision_time = Time.parse('2026-10-29 11:00:00 +0330')
+      change_time = Time.parse('2026-10-29 10:45:00 +0330')
+      @serialized_node[:last] = { status: :no_connection, end: attempt_time }
+      @serialized_node[:mtime] = change_time
+      @serialized_node[:vars] = {
+        password: 'detail-password-secret', api_key: 'detail-api-key-secret',
+        location: 'north-datacenter', version: 'IOS 17.9'
+      }
+      @nodes.expects(:version).with('sw5', nil).returns(
+        [{ oid: 'saved-revision', time: revision_time }]
+      )
+
+      get '/node/show/sw5'
+
+      _(last_response.ok?).must_equal true
+      body = last_response.body
+      _(body).wont_include('detail-password-secret')
+      _(body).wont_include('detail-api-key-secret')
+      _(body).must_include('north-datacenter')
+      _(body).must_include('Protected by redaction policy')
+      _(body).must_include('Advanced redacted device metadata')
+      _(body).must_include('Latest backup attempt')
+      _(body).must_include('Last stored revision')
+      _(body).must_include('Last detected change')
+      _(body).must_include("epoch=\"#{attempt_time.to_i}\"")
+      status_card = body.split('class="detail-card detail-card-status"', 2).last.split('</div>', 2).first
+      _(status_card).must_include('Latest backup attempt')
+      _(status_card).must_include("epoch=\"#{attempt_time.to_i}\"")
+      _(status_card).must_include(attempt_time.to_s)
+      revision_card = body.split('class="detail-card detail-card-revisions"', 2).last.split('</div>', 2).first
+      _(revision_card).must_include("Last stored revision: #{revision_time}")
+      _(revision_card).must_include("Last detected change: #{change_time}")
+    end
+
     describe "Oxidized > 0.34.1" do
       before do
         @serialized_node[:vars] = {

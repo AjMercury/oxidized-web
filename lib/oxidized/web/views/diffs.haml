@@ -1,184 +1,341 @@
+- current_version = @selected_diff_version || { oid: @info[:oid], time: @info[:time], number: @info[:num] }
+- previous_version = @previous_diff_version || {}
+- added_count = @stat[0].to_s == 'null' ? '—' : @stat[0]
+- removed_count = @stat[1].to_s == 'null' ? '—' : @stat[1]
+- history_node = @info[:group].to_s.empty? ? @info[:node] : "#{@info[:group]}/#{@info[:node]}"
+- history_url = url_for("/node/version?node_full=#{history_node}")
+- current_params = "node=#{@info[:node]}&group=#{@info[:group]}&oid=#{current_version[:oid]}&epoch=#{current_version[:time].to_i}&num=#{current_version[:number]}"
+- download_url = url_for("/node/version/view?#{current_params}&format=text")
+
 .page-heading
   .page-heading-copy
     .breadcrumbs
       %a{href: url_for('/nodes')} Devices
       %i.bi.bi-chevron-right{:'aria-hidden' => 'true'}
-      - if @info[:group] != ''
-        - node_full = "#{@info[:group]}/#{@info[:node]}"
-      - else
-        - node_full = "#{@info[:node]}"
-      %a{href: url_for("/node/version?node_full=#{node_full}")} History
+      %a{href: history_url} History
       %i.bi.bi-chevron-right{:'aria-hidden' => 'true'}
       %span Configuration comparison
     %span.eyebrow.text-muted Change review
     %h1 Configuration diff
-    %p Compare two saved snapshots for #{@info[:node]}.
+    %p Compare saved configurations for #{@info[:node]}.
   .page-heading-actions
-    %a.btn.btn-outline-secondary{href: url_for("/node/version?node_full=#{node_full}")}
+    %a.btn.btn-outline-secondary{href: history_url}
       %i.bi.bi-arrow-left{:'aria-hidden' => 'true'}
-      Version history
+      Return to version history
 
-.diff-summary
+.diff-summary{:'aria-label' => 'Configuration change summary'}
   .diff-stat
     %span.diff-stat-mark.added +
-    %strong #{@stat[0]}
+    %strong= added_count
     %span lines added
   .diff-stat
     %span.diff-stat-mark.deleted −
-    %strong #{@stat[1]}
+    %strong= removed_count
     %span lines removed
   .diff-summary-time
-    %span.text-muted Selected version
-    %span.time{epoch: @info[:time].to_i}= @info[:time]
+    %span.text-muted Selected configuration
+    %span.time{epoch: current_version[:time].to_i}= current_version[:time]
 
-.diff-view-toolbar
-  %span.diff-view-label Compare view
-  %button.btn.btn-sm.btn-outline-secondary#diffUnifiedToggle{type: 'button', :'aria-pressed' => 'false'}
-    %i.bi.bi-list-ul{:'aria-hidden' => 'true'}
-    Unified
-  %button.btn.btn-sm.btn-outline-secondary#diffExpand{type: 'button', :'aria-pressed' => 'false'}
-    %i.bi.bi-arrows-fullscreen{:'aria-hidden' => 'true'}
-    Expand comparison
+.diff-toolbar.sticky-diff-toolbar
+  .diff-version-form-wrap
+    %form.diff-select-form#diffVersionForm{action: url_for('/node/version/diffs'), method: 'get'}
+      %input{type: 'hidden', name: 'node', value: @info[:node]}
+      %input{type: 'hidden', name: 'group', value: @info[:group]}
+      %input#diffEpoch{type: 'hidden', name: 'epoch', value: current_version[:time].to_i}
+      %input#diffNumber{type: 'hidden', name: 'num', value: current_version[:number]}
+      .diff-version-select
+        %label.form-label{for: 'currentRevision'} Selected version
+        %select.form-select#currentRevision{name: 'oid'}
+          - @diff_versions.each do |version|
+            %option{value: version[:oid], selected: version[:oid].to_s == current_version[:oid].to_s,
+                    :'data-epoch' => version[:time].to_i, :'data-number' => version[:number]}
+              Version #{version[:number]} · #{version[:time].strftime('%Y-%m-%d %H:%M:%S %Z')}
+      .diff-version-select
+        %label.form-label{for: 'previousRevision'} Previous version
+        %select.form-select#previousRevision{name: 'oid2', disabled: @diff_versions.length < 2}
+          - @diff_versions.each do |version|
+            - next if version[:oid].to_s == current_version[:oid].to_s
+            %option{value: version[:oid], selected: version[:oid].to_s == previous_version[:oid].to_s,
+                    :'data-number' => version[:number]}
+              Version #{version[:number]} · #{version[:time].strftime('%Y-%m-%d %H:%M:%S %Z')}
+      %button.btn.btn-primary{type: 'submit', disabled: @diff_versions.length < 2}
+        %i.bi.bi-arrow-left-right{:'aria-hidden' => 'true'}
+        Compare versions
 
-.diff-select-card
-  .diff-select-copy
-    %strong Choose comparison version
-    %span Compare this snapshot against another saved configuration.
-  - params = "node=#{@info[:node]}&group=#{@info[:group]}&oid=#{@info[:oid]}"
-  - params = "#{params}&epoch=#{@info[:time].to_i}&num=#{@info[:num]}"
-  %form.diff-select-form{action: url_for("/node/version/diffs?#{params}"), method: 'post', role: 'form'}
-    %input{type: 'hidden', name: 'csrf_token', value: @csrf_token}
-    %label.visually-hidden{for: 'oid2'} Previous configuration version
-    %select.form-select#oid2{name: 'oid2'}
-      - diff2 = {}
-      - num = @oids_dates.count + 1
-      - next_id = false
-      - @oids_dates.each do |x|
-        - version_number = num -= 1
-        %option{value: x[:oid], selected: @info[:num2].to_i == version_number} Version #{version_number} (#{time_from_now x[:time]})
-        - if (x[:oid].to_s == @info[:oid2]) || (next_id)
-          - diff2 = {num: num, time: x[:time]}
-          - next_id = false
-        - elsif (x[:oid].to_s == @info[:oid]) && !(@info[:oid2])
-          - next_id = true
-    %button.btn.btn-primary{type: 'submit'}
-      %i.bi.bi-arrow-left-right{:'aria-hidden' => 'true'}
-      Compare versions
+  .diff-control-group{role: 'group', :'aria-label' => 'Diff display controls'}
+    %button.btn.btn-outline-secondary#diffUnifiedToggle{type: 'button', :'aria-pressed' => 'false'}
+      %i.bi.bi-list-ul{:'aria-hidden' => 'true'}
+      Unified view
+    %button.btn.btn-outline-secondary#diffPrevChange{type: 'button', title: 'Previous change'}
+      %i.bi.bi-arrow-up{:'aria-hidden' => 'true'}
+      Previous change
+    %button.btn.btn-outline-secondary#diffNextChange{type: 'button', title: 'Next change'}
+      %i.bi.bi-arrow-down{:'aria-hidden' => 'true'}
+      Next change
+    %button.btn.btn-outline-secondary#diffContextToggle{type: 'button', :'aria-pressed' => 'false'}
+      %i.bi.bi-arrows-collapse{:'aria-hidden' => 'true'}
+      Collapse unchanged
+    %button.btn.btn-outline-secondary#diffExpandChanges{type: 'button'}
+      %i.bi.bi-arrows-expand{:'aria-hidden' => 'true'}
+      Expand all changes
+    %button.btn.btn-outline-secondary#diffWrapToggle{type: 'button', :'aria-pressed' => 'false'}
+      %i.bi.bi-text-wrap{:'aria-hidden' => 'true'}
+      Word wrap
+    %button.btn.btn-outline-secondary#diffCopy{type: 'button'}
+      %i.bi.bi-clipboard{:'aria-hidden' => 'true'}
+      Copy comparison
+    %a.btn.btn-outline-secondary{href: download_url, title: 'Download the selected configuration'}
+      %i.bi.bi-download{:'aria-hidden' => 'true'}
+      Download selected
+    %button.btn.btn-outline-secondary#diffFullscreen{type: 'button', :'aria-pressed' => 'false'}
+      %i.bi.bi-arrows-fullscreen{:'aria-hidden' => 'true'}
+      Full screen
+
+.diff-feedback#diffFeedback{role: 'status', :'aria-live' => 'polite'}
 
 .diff-pane-heading
   .diff-pane-title
     %span.diff-version-label Previous version
-    %strong Version #{diff2[:num]}
-    %span.time{epoch: diff2[:time].to_i}= diff2[:time]
+    %strong= previous_version[:number] ? "Version #{previous_version[:number]}" : 'Previous snapshot'
+    %span.time{epoch: previous_version[:time]&.to_i}= previous_version[:time] || 'Earlier configuration'
   .diff-pane-title.diff-pane-title-new
     %span.diff-version-label Selected version
-    %strong Version #{@info[:num]}
-    %span.time{epoch: @info[:time].to_i}= @info[:time]
+    %strong= current_version[:number] ? "Version #{current_version[:number]}" : 'Selected snapshot'
+    %span.time{epoch: current_version[:time].to_i}= current_version[:time]
 
-.diff-pane-grid#sideBySideDiff{:'aria-label' => 'Side-by-side configuration comparison'}
-  .diff-pane.diff-pane-old
-    .diffs_old{role: 'region', :'aria-label' => 'Previous configuration version', tabindex: '0'}
-      - @diff[:old_diff].each do |line|
-        - if /^\+.*/.match(line)
-          .added><
-            != escape_once("#{line}")
-        - elsif /^\-.*/.match(line)
-          .deleted><
-            != escape_once("#{line}")
-        - elsif /^@@\s.*@@.*$/.match(line)
-          .diff-index><
-            != escape_once("#{line}")
-        - elsif /^empty_line&nbsp;/.match(line)
-          - line.slice! "empty_line"
-          .diff-empty><
-            != escape_once("#{line}")
-        - elsif /^\s*#/.match(line)
-          .diff-comment><
-            != escape_once("#{line}")
-        - elsif /^\s*\//.match(line)
-          .diff-section><
-            != escape_once("#{line}")
-        - else
-          %div><
-            != escape_once("#{line}")
-  .diff-pane.diff-pane-new
-    .diffs_new{role: 'region', :'aria-label' => 'Selected configuration version', tabindex: '0'}
-      - @diff[:new_diff].each do |line|
-        - if /^\+.*/.match(line)
-          .added><
-            != escape_once("#{line}")
-        - elsif /^\-.*/.match(line)
-          .deleted><
-            != escape_once("#{line}")
-        - elsif /^@@\s.*@@.*$/.match(line)
-          .diff-index><
-            != escape_once("#{line}")
-        - elsif /^empty_line&nbsp;/.match(line)
-          - line.slice! "empty_line"
-          .diff-empty><
-            != escape_once("#{line}")
-        - elsif /^\s*#/.match(line)
-          .diff-comment><
-            != escape_once("#{line}")
-        - elsif /^\s*\//.match(line)
-          .diff-section><
-            != escape_once("#{line}")
-        - else
-          %div><
-            != escape_once("#{line}")
+- if @diff[:message]
+  .empty-state.diff-empty-state= @diff[:message]
+- else
+  .diff-pane-grid#sideBySideDiff{:'aria-label' => 'Side-by-side configuration comparison'}
+    .diff-pane.diff-pane-old
+      .diff-code-view#oldDiffPane{role: 'region', :'aria-label' => 'Previous configuration lines', tabindex: '0'}
+        .diff-code-lines
+          - @diff[:rows].each_with_index do |row, row_index|
+            - kind = row[:kind].to_s
+            - old_kind = kind == 'modified' ? 'removed' : kind
+            - row_class = row[:old_text].nil? ? 'diff-line-placeholder' : "diff-line-#{old_kind}"
+            - row_class = "#{row_class} diff-line-change" if kind != 'context' && !row[:old_text].nil?
+            - parts = diff_intraline(row[:old_text], row[:new_text]) if kind == 'modified'
+            .diff-line{class: row_class, :'data-row-index' => row_index,
+                       :'data-change-index' => kind == 'context' || row[:old_text].nil? ? nil : row_index}
+              %span.diff-line-gutter= row[:old_number]
+              %code.diff-line-content
+                - if parts
+                  - parts[:old].each_with_index do |part, part_index|
+                    - if part_index == 1
+                      %mark.diff-intraline-change= part
+                    - else
+                      = part
+                - else
+                  = row[:old_text].to_s
+    .diff-pane.diff-pane-new
+      .diff-code-view#newDiffPane{role: 'region', :'aria-label' => 'Selected configuration lines', tabindex: '0'}
+        .diff-code-lines
+          - @diff[:rows].each_with_index do |row, row_index|
+            - kind = row[:kind].to_s
+            - new_kind = kind == 'modified' ? 'added' : kind
+            - row_class = row[:new_text].nil? ? 'diff-line-placeholder' : "diff-line-#{new_kind}"
+            - row_class = "#{row_class} diff-line-change" if kind != 'context' && !row[:new_text].nil?
+            - parts = diff_intraline(row[:old_text], row[:new_text]) if kind == 'modified'
+            .diff-line{class: row_class, :'data-row-index' => row_index,
+                       :'data-change-index' => kind == 'context' || row[:new_text].nil? ? nil : row_index}
+              %span.diff-line-gutter= row[:new_number]
+              %code.diff-line-content
+                - if parts
+                  - parts[:new].each_with_index do |part, part_index|
+                    - if part_index == 1
+                      %mark.diff-intraline-change= part
+                    - else
+                      = part
+                - else
+                  = row[:new_text].to_s
 
-.unified-diff#unifiedDiff{hidden: true, role: 'region', :'aria-label' => 'Unified configuration comparison', tabindex: '0'}
-  - @diff_patch.each_line do |line|
-    - if /^\+/.match(line)
-      .added><
-        != escape_once("#{line}")
-    - elsif /^-/.match(line)
-      .deleted><
-        != escape_once("#{line}")
-    - elsif /^@@\s.*@@/.match(line)
-      .diff-index><
-        != escape_once("#{line}")
-    - elsif /^\s*#/.match(line)
-      .diff-comment><
-        != escape_once("#{line}")
-    - else
-      %div><
-        != escape_once("#{line}")
+  .unified-diff#unifiedDiff{hidden: true, role: 'region', :'aria-label' => 'Unified configuration comparison', tabindex: '0'}
+    .diff-code-lines
+      - @diff[:rows].each_with_index do |row, row_index|
+        - kind = row[:kind].to_s
+        - if kind == 'modified'
+          - parts = diff_intraline(row[:old_text], row[:new_text])
+          .diff-line.diff-line-removed.diff-line-change{:'data-row-index' => row_index, :'data-change-index' => row_index,
+                                                        :'data-prefix' => '-', :'aria-label' => "Removed line #{row[:old_number]}"}
+            %span.diff-line-gutter= row[:old_number]
+            %code.diff-line-content
+              - parts[:old].each_with_index do |part, part_index|
+                - if part_index == 1
+                  %mark.diff-intraline-change= part
+                - else
+                  = part
+          .diff-line.diff-line-added.diff-line-change{:'data-row-index' => row_index, :'data-change-index' => row_index,
+                                                        :'data-prefix' => '+', :'aria-label' => "Added line #{row[:new_number]}"}
+            %span.diff-line-gutter= row[:new_number]
+            %code.diff-line-content
+              - parts[:new].each_with_index do |part, part_index|
+                - if part_index == 1
+                  %mark.diff-intraline-change= part
+                - else
+                  = part
+        - else
+          - line_number = row[:kind] == :removed ? row[:old_number] : row[:new_number]
+          - prefix = row[:kind] == :removed ? '-' : (row[:kind] == :added ? '+' : ' ')
+          .diff-line{class: "diff-line-#{kind} #{kind == 'context' ? '' : 'diff-line-change'}",
+                     :'data-row-index' => row_index, :'data-change-index' => kind == 'context' ? nil : row_index,
+                     :'data-prefix' => prefix}
+            %span.diff-line-gutter= line_number
+            %code.diff-line-content= row[:kind] == :removed ? row[:old_text] : row[:new_text]
 
 :javascript
-  $(function() {
-    var oldPane = document.querySelector('.diffs_old');
-    var newPane = document.querySelector('.diffs_new');
+  (function() {
+    var split = document.getElementById('sideBySideDiff');
+    var unified = document.getElementById('unifiedDiff');
+    if (!split || !unified) return;
+
+    var oldPane = document.getElementById('oldDiffPane');
+    var newPane = document.getElementById('newDiffPane');
+    var toggleView = document.getElementById('diffUnifiedToggle');
+    var currentRevision = document.getElementById('currentRevision');
+    var previousRevision = document.getElementById('previousRevision');
+    var feedback = document.getElementById('diffFeedback');
     var syncLock = false;
+    var wrapped = false;
+
     [[oldPane, newPane], [newPane, oldPane]].forEach(function(pair) {
       pair[0].addEventListener('scroll', function() {
         if (syncLock) return;
         syncLock = true;
         pair[1].scrollTop = pair[0].scrollTop;
+        pair[1].scrollLeft = pair[0].scrollLeft;
         syncLock = false;
       }, { passive: true });
     });
-    $('#diffUnifiedToggle').on('click', function() {
-      var unified = document.getElementById('unifiedDiff');
-      var sideBySide = document.getElementById('sideBySideDiff');
-      var showing = unified.hidden;
-      unified.hidden = !showing;
-      sideBySide.hidden = showing;
-      unified.classList.toggle('is-visible', showing);
-      this.setAttribute('aria-pressed', String(showing));
-      this.innerHTML = showing ? '<i class="bi bi-columns-gap" aria-hidden="true"></i> Side by side' : '<i class="bi bi-list-ul" aria-hidden="true"></i> Unified';
+
+    function refreshPreviousOptions() {
+      if (!currentRevision || !previousRevision) return;
+      Array.from(previousRevision.options).forEach(function(option) {
+        option.disabled = option.value === currentRevision.value;
+      });
+      if (previousRevision.value === currentRevision.value) {
+        var nextOption = Array.from(previousRevision.options).find(function(option) {
+          return !option.disabled;
+        });
+        if (nextOption) previousRevision.value = nextOption.value;
+      }
+    }
+    if (currentRevision) {
+      currentRevision.addEventListener('change', function() {
+        var option = currentRevision.options[currentRevision.selectedIndex];
+        document.getElementById('diffEpoch').value = option.dataset.epoch;
+        document.getElementById('diffNumber').value = option.dataset.number;
+        refreshPreviousOptions();
+      });
+    }
+    refreshPreviousOptions();
+
+    toggleView.addEventListener('click', function() {
+      var showUnified = unified.hidden;
+      unified.hidden = !showUnified;
+      split.hidden = showUnified;
+      toggleView.setAttribute('aria-pressed', String(showUnified));
+      toggleView.innerHTML = showUnified
+        ? '<i class="bi bi-columns-gap" aria-hidden="true"></i> Split view'
+        : '<i class="bi bi-list-ul" aria-hidden="true"></i> Unified view';
     });
-    $('#diffExpand').on('click', function() {
-      var panels = document.querySelectorAll('.diff-pane-grid, .unified-diff');
-      var expanded = !Array.from(panels).some(function(panel) { return panel.classList.contains('is-expanded'); });
-      panels.forEach(function(panel) { panel.classList.toggle('is-expanded', expanded); });
-      this.setAttribute('aria-pressed', String(expanded));
-      this.innerHTML = expanded ? '<i class="bi bi-fullscreen-exit" aria-hidden="true"></i> Exit full screen' : '<i class="bi bi-arrows-fullscreen" aria-hidden="true"></i> Expand comparison';
+
+    document.getElementById('diffContextToggle').addEventListener('click', function() {
+      var collapsed = this.getAttribute('aria-pressed') !== 'true';
+      [split, unified].forEach(function(view) { view.classList.toggle('diff-context-collapsed', collapsed); });
+      this.setAttribute('aria-pressed', String(collapsed));
+      this.innerHTML = collapsed
+        ? '<i class="bi bi-arrows-expand" aria-hidden="true"></i> Show unchanged'
+        : '<i class="bi bi-arrows-collapse" aria-hidden="true"></i> Collapse unchanged';
+    });
+
+    document.getElementById('diffExpandChanges').addEventListener('click', function() {
+      [split, unified].forEach(function(view) { view.classList.remove('diff-context-collapsed'); });
+      document.getElementById('diffContextToggle').setAttribute('aria-pressed', 'false');
+      var firstChange = document.querySelector('.diff-pane-grid:not([hidden]) [data-change-index], .unified-diff:not([hidden]) [data-change-index]');
+      if (firstChange) firstChange.scrollIntoView({ block: 'center' });
+    });
+
+    document.getElementById('diffWrapToggle').addEventListener('click', function() {
+      wrapped = !wrapped;
+      document.querySelectorAll('.diff-code-view, .unified-diff').forEach(function(view) {
+        view.classList.toggle('diff-word-wrap', wrapped);
+      });
+      this.setAttribute('aria-pressed', String(wrapped));
+      window.requestAnimationFrame(alignWrappedRows);
+    });
+
+    function alignWrappedRows() {
+      var oldLines = Array.from(oldPane.querySelectorAll('[data-row-index]'));
+      var newLines = Array.from(newPane.querySelectorAll('[data-row-index]'));
+      var nextHeights = new Map();
+      oldLines.concat(newLines).forEach(function(line) {
+        line.style.minHeight = '';
+        var index = line.dataset.rowIndex;
+        nextHeights.set(index, Math.max(nextHeights.get(index) || 0, line.getBoundingClientRect().height));
+      });
+      if (wrapped) {
+        oldLines.concat(newLines).forEach(function(line) {
+          line.style.minHeight = nextHeights.get(line.dataset.rowIndex) + 'px';
+        });
+      }
+    }
+    window.addEventListener('resize', function() {
+      if (wrapped) window.requestAnimationFrame(alignWrappedRows);
+    });
+
+    var changeRows = Array.from(new Set(Array.from(document.querySelectorAll('[data-change-index]'))
+      .map(function(line) { return Number(line.dataset.changeIndex); }))).sort(function(a, b) { return a - b; });
+    var currentChange = -1;
+    function moveToChange(direction) {
+      if (!changeRows.length) return;
+      currentChange = (currentChange + direction + changeRows.length) % changeRows.length;
+      var rowIndex = changeRows[currentChange];
+      var target = document.querySelector('.diff-pane-grid:not([hidden]) #newDiffPane [data-row-index="' + rowIndex + '"], ' +
+        '.diff-pane-grid:not([hidden]) #oldDiffPane [data-row-index="' + rowIndex + '"], ' +
+        '.unified-diff:not([hidden]) [data-row-index="' + rowIndex + '"]');
+      if (target) {
+        document.querySelectorAll('.diff-line-current').forEach(function(line) { line.classList.remove('diff-line-current'); });
+        target.classList.add('diff-line-current');
+        target.scrollIntoView({ block: 'center' });
+      }
+    }
+    document.getElementById('diffPrevChange').addEventListener('click', function() { moveToChange(-1); });
+    document.getElementById('diffNextChange').addEventListener('click', function() { moveToChange(1); });
+
+    document.getElementById('diffCopy').addEventListener('click', function() {
+      var text = Array.from(unified.querySelectorAll('.diff-line')).map(function(line) {
+        return line.dataset.prefix + line.querySelector('.diff-line-content').textContent;
+      }).join('\n');
+      function announce(message) { feedback.textContent = message; }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function() { announce('Comparison copied.'); })
+          .catch(function() { announce('Clipboard access is unavailable in this browser.'); });
+      } else {
+        var temporary = document.createElement('textarea');
+        temporary.value = text;
+        document.body.appendChild(temporary);
+        temporary.select();
+        var copied = document.execCommand('copy');
+        temporary.remove();
+        announce(copied ? 'Comparison copied.' : 'Clipboard access is unavailable in this browser.');
+      }
+    });
+
+    document.getElementById('diffFullscreen').addEventListener('click', function() {
+      var activeView = unified.hidden ? split : unified;
+      var fullscreen = !activeView.classList.contains('diff-is-fullscreen');
+      [split, unified].forEach(function(view) { view.classList.remove('diff-is-fullscreen'); });
+      activeView.classList.toggle('diff-is-fullscreen', fullscreen);
+      this.setAttribute('aria-pressed', String(fullscreen));
+      this.innerHTML = fullscreen
+        ? '<i class="bi bi-fullscreen-exit" aria-hidden="true"></i> Exit full screen'
+        : '<i class="bi bi-arrows-fullscreen" aria-hidden="true"></i> Full screen';
     });
     document.addEventListener('keydown', function(event) {
       if (event.key === 'Escape') {
-        document.querySelectorAll('.is-expanded').forEach(function(panel) { panel.classList.remove('is-expanded'); });
-        $('#diffExpand').attr('aria-pressed', 'false');
+        [split, unified].forEach(function(view) { view.classList.remove('diff-is-fullscreen'); });
+        document.getElementById('diffFullscreen').setAttribute('aria-pressed', 'false');
       }
     });
-  });
+  })();

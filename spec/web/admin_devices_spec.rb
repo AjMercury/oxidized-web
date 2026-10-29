@@ -102,7 +102,10 @@ describe 'administrator device management' do
     _(last_response.body).must_include('All vendors')
     _(last_response.body).must_include('Cisco')
     _(last_response.body).must_include('/images/vendors/cisco.svg')
-    _(last_response.body).must_match(%r{</select>\s*<form[^>]*id="bulkDevices"}m)
+    _(last_response.body).must_include('required-indicator')
+    _(last_response.body).must_include('id="managedGroupFilter"')
+    _(last_response.body).must_include('id="managedStatusFilter"')
+    _(last_response.body).must_include('id="bulkDevices"')
   end
 
   it 'explains an incomplete CSV mapping instead of rendering an empty Add Device form' do
@@ -113,8 +116,9 @@ describe 'administrator device management' do
 
     _(last_response.ok?).must_equal true
     _(last_response.body).must_include('source.csv.map is missing required Core fields: ip')
-    _(last_response.body).must_include('Check the actual column order')
-    _(last_response.body).must_include('Example only: replace each placeholder')
+    _(last_response.body).must_include('actual CSV header and column order')
+    _(last_response.body).must_include('Use the zero-based positions from your existing CSV')
+    _(last_response.body.scan('class="alert alert-warning inventory-source-alert"').length).must_equal 1
     _(last_response.body).wont_include('class="device-form-card"')
     _(last_response.body).wont_include('name="password"')
   end
@@ -125,10 +129,10 @@ describe 'administrator device management' do
     get '/admin/devices', {}, admin_headers
 
     _(last_response.ok?).must_equal true
-    _(last_response.body).must_include('The configured inventory is read-only in Web')
+    _(last_response.body).must_include('Inventory mutations are disabled')
     _(last_response.body).must_include('Device management supports only a CSV inventory source.')
     _(last_response.body).wont_include('source.csv.map is missing required Core fields')
-    _(last_response.body).wont_include('name: &lt;column index&gt;')
+    _(last_response.body).wont_include('name: &lt;zero-based column index&gt;')
     _(last_response.body).wont_include('class="device-form-card"')
   end
 

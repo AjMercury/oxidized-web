@@ -1,0 +1,53 @@
+.page-heading
+  .page-heading-copy
+    .breadcrumbs
+      %a{href: url_for('/nodes')} Devices
+      %i.bi.bi-chevron-right{:'aria-hidden' => 'true'}
+      %a{href: @config_back_url}= @config_back_label
+      %i.bi.bi-chevron-right{:'aria-hidden' => 'true'}
+      %span= @config_title
+    %span.eyebrow.text-muted Configuration viewer
+    %h1= @config_title
+    %p
+      = @config_description
+      - if @config_timestamp
+        %span.time{epoch: @config_timestamp.to_i}= @config_timestamp
+  .page-heading-actions
+    %a.btn.btn-outline-secondary{href: @config_back_url}
+      %i.bi.bi-arrow-left{:'aria-hidden' => 'true'}
+      Back to #{@config_back_label}
+    %a.btn.btn-outline-secondary{href: @config_download_url}
+      %i.bi.bi-download{:'aria-hidden' => 'true'}
+      Download raw
+
+.config-panel.configuration-viewer-panel#configurationWorkspace
+  .config-panel-header
+    .config-panel-label
+      %i.bi.bi-file-earmark-code{:'aria-hidden' => 'true'}
+      = @config_source_label
+    %span#configLineCount.config-format
+  .config-viewer-toolbar
+    .config-search-controls
+      %label.visually-hidden{for: 'configSearch'} Search configuration
+      %i.bi.bi-search{:'aria-hidden' => 'true'}
+      %input.form-control#configSearch{type: 'search', placeholder: 'Find text in this configuration…', autocomplete: 'off'}
+      %span#configSearchCount{role: 'status', :'aria-live' => 'polite'}
+      %button.btn.btn-outline-secondary.btn-sm#configPrevMatch{type: 'button', :'aria-label' => 'Previous match', title: 'Previous match'}
+        %i.bi.bi-arrow-up{:'aria-hidden' => 'true'}
+      %button.btn.btn-outline-secondary.btn-sm#configNextMatch{type: 'button', :'aria-label' => 'Next match', title: 'Next match'}
+        %i.bi.bi-arrow-down{:'aria-hidden' => 'true'}
+    .config-viewer-actions
+      %button.btn.btn-outline-secondary.btn-sm#configCopy{type: 'button'}
+        %i.bi.bi-clipboard{:'aria-hidden' => 'true'}
+        Copy
+      %button.btn.btn-outline-secondary.btn-sm#configWrap{type: 'button', :'aria-pressed' => 'false'}
+        %i.bi.bi-text-wrap{:'aria-hidden' => 'true'}
+        Word wrap
+      %button.btn.btn-outline-secondary.btn-sm#configFullscreen{type: 'button', :'aria-pressed' => 'false'}
+        %i.bi.bi-arrows-fullscreen{:'aria-hidden' => 'true'}
+        Full screen
+  .config-viewer-feedback#configFeedback{role: 'status', :'aria-live' => 'polite'}
+  %div.config-view#configViewer{role: 'region', :'aria-label' => 'Configuration text with line numbers', tabindex: '0'}
+%pre.visually-hidden#configurationAccessibleText{role: 'region', :'aria-label' => 'Complete configuration text'}
+  %code#configSource!= escape_once(@data)
+%script{src: url_for("/scripts/config-viewer.js?v=#{Oxidized::API::WEB_VERSION}")}

@@ -8,13 +8,17 @@
     %h1 Edit device
     %p Update mapped inventory fields for #{@device[:name]}.
 .table-card.device-form-card
-  %form{action: url_for("/admin/devices/#{@device[:name]}"), method: 'post', autocomplete: 'off'}
+  %form{action: url_for("/admin/devices/#{@device[:name]}"), method: 'post', autocomplete: 'off', :'data-loading-label' => 'Saving changes…'}
     %input{type: 'hidden', name: 'csrf_token', value: @csrf_token}
     .device-form-grid
       - [['new_name', 'name', 'Hostname'], ['ip', 'ip', 'Management IP / FQDN'], ['group', 'group', 'Device group'], ['username', 'username', 'Username']].each do |input_name, field, label|
         - if @device_fields.include?(field)
           .mb-3
-            %label.form-label{for: "device-#{field}"}= label
+            %label.form-label{for: "device-#{field}"}
+              = label
+              - if %w[name ip].include?(field)
+                %span.required-indicator{:'aria-hidden' => 'true'} *
+                %span.visually-hidden required
             %input.form-control{id: "device-#{field}", name: input_name, type: 'text', value: field == 'name' ? @device[:name] : @device[field.to_sym], required: %w[name ip].include?(field), autocomplete: 'off'}
       - if @device_fields.include?('model')
         .mb-3
@@ -30,7 +34,10 @@
               %i.bi.bi-hdd-network{:'aria-hidden' => 'true'}
             %span= vendor_for_model(@device[:model])
         .mb-3
-          %label.form-label.mt-2{for: 'device-model'} Oxidized model
+          %label.form-label.mt-2{for: 'device-model'}
+            Oxidized model
+            %span.required-indicator{:'aria-hidden' => 'true'} *
+            %span.visually-hidden required
           %input.form-control#device-model{name: 'model', type: 'search', list: 'oxidized-model-list', value: @device[:model], required: true, autocomplete: 'off'}
           %datalist#oxidized-model-list
             - @models.each do |model|
