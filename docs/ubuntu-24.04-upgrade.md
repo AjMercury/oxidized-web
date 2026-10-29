@@ -2,7 +2,20 @@
 
 This release pairs the manual backup queue in [Core PR #1](https://github.com/AjMercury/oxidized/pull/1) with the interface in [Web PR #1](https://github.com/AjMercury/oxidized-web/pull/1). Merge both into their respective `master` branches before using the commands below. These are the AjMercury forks; do not substitute the upstream repositories or RubyGems releases.
 
-The procedure assumes the existing `oxidized.service` and its `/usr/local/bin` RubyGems installation. Check `systemctl show oxidized.service --property=ExecStart` and use the same Ruby/Gem environment if your service differs. Keep the current SQLite authentication database, CSV source, configuration and Git repository paths. A routine update does not need administrator bootstrapping.
+The reported service runs `/usr/bin/ruby3.2 /usr/local/bin/oxidized`. The executable location of Oxidized does not establish the location of the `gem` command: `/usr/local/bin/gem` may not exist. Invoke RubyGems through the service's Ruby interpreter instead. Check `systemctl show oxidized.service --property=ExecStart` and retain any configured `GEM_HOME`/`GEM_PATH` if your service uses a custom gem environment. Keep the current SQLite authentication database, CSV source, configuration and Git repository paths. A routine update does not need administrator bootstrapping.
+
+Define these helpers in the same shell used for the following commands. If your service uses another Ruby interpreter, change `OX_RUBY` to that exact path before proceeding.
+
+```sh
+OX_RUBY=/usr/bin/ruby3.2
+oxgem() {
+  "$OX_RUBY" -r rubygems/gem_runner -e 'Gem::GemRunner.new.run(ARGV)' -- "$@"
+}
+oxgem_root() {
+  sudo "$OX_RUBY" -r rubygems/gem_runner -e 'Gem::GemRunner.new.run(ARGV)' -- "$@"
+}
+oxgem --version
+```
 
 ## Build from the merged main branches
 
@@ -13,8 +26,8 @@ set -eu
 OX_BUILD="$(mktemp -d -t oxidized-enterprise.XXXXXX)"
 git clone --branch master --single-branch https://github.com/AjMercury/oxidized.git "$OX_BUILD/oxidized"
 git clone --branch master --single-branch https://github.com/AjMercury/oxidized-web.git "$OX_BUILD/oxidized-web"
-(cd "$OX_BUILD/oxidized" && gem build oxidized.gemspec)
-(cd "$OX_BUILD/oxidized-web" && gem build oxidized-web.gemspec)
+(cd "$OX_BUILD/oxidized" && oxgem build oxidized.gemspec)
+(cd "$OX_BUILD/oxidized-web" && oxgem build oxidized-web.gemspec)
 test -f "$OX_BUILD/oxidized/oxidized-0.37.3.gem"
 test -f "$OX_BUILD/oxidized-web/oxidized-web-0.25.0.gem"
 sha256sum "$OX_BUILD/oxidized/oxidized-0.37.3.gem" "$OX_BUILD/oxidized-web/oxidized-web-0.25.0.gem"
@@ -27,17 +40,20 @@ If either filename check fails, the required PR has not been merged or the wrong
 Stop the service before copying SQLite and Git data so the backup is consistent. Use the real local paths from your installation for configuration, CSV, `OXIDIZED_WEB_AUTH_DB`, and output Git repositories; the example directory covers the common installation only. Add any configured paths outside this directory to the archive.
 
 ```sh
+test -f "$OX_BUILD/oxidized/oxidized-0.37.3.gem"
+test -f "$OX_BUILD/oxidized-web/oxidized-web-0.25.0.gem"
+oxgem --version
 sudo systemctl stop oxidized.service
 sudo install -d -m 0700 /var/backups/oxidized
 OX_SNAPSHOT="/var/backups/oxidized/pre-0.25.0-$(date -u +%Y%m%dT%H%M%SZ).tar.gz"
 sudo tar -czf "$OX_SNAPSHOT" -C /home/oxidized/.config oxidized
 sudo chmod 0600 "$OX_SNAPSHOT"
 sudo tar -tzf "$OX_SNAPSHOT" >/dev/null
-sudo /usr/local/bin/gem install --local --no-document "$OX_BUILD/oxidized/oxidized-0.37.3.gem"
-sudo /usr/local/bin/gem install --local --no-document "$OX_BUILD/oxidized-web/oxidized-web-0.25.0.gem"
+oxgem_root install --local --no-document "$OX_BUILD/oxidized/oxidized-0.37.3.gem"
+oxgem_root install --local --no-document "$OX_BUILD/oxidized-web/oxidized-web-0.25.0.gem"
 sudo systemctl start oxidized.service
 sudo systemctl --no-pager --full status oxidized.service
-sudo -u oxidized -H /usr/local/bin/ruby -e 'require "oxidized"; require "oxidized/web"; puts "Core #{Oxidized::VERSION}; Web #{Oxidized::API::WEB_VERSION}"'
+sudo -u oxidized -H "$OX_RUBY" -e 'require "oxidized"; require "oxidized/web"; puts "Core #{Oxidized::VERSION}; Web #{Oxidized::API::WEB_VERSION}"'
 ```
 
 Install Core first because Web 0.25.0 declares Core >= 0.37.3. `--local` uses the built packages and already installed dependencies; it does not publish either Gem. If dependency installation fails, resolve it in the service's existing Ruby environment before starting the update again.
@@ -59,8 +75,8 @@ Retain the previously installed Core 0.37.2 and Web 0.24.1 Gems until acceptance
 
 ```sh
 sudo systemctl stop oxidized.service
-sudo /usr/local/bin/gem uninstall oxidized-web --version 0.25.0 --executables
-sudo /usr/local/bin/gem uninstall oxidized --version 0.37.3 --executables
+oxgem_root uninstall oxidized-web --version 0.25.0 --executables
+oxgem_root uninstall oxidized --version 0.37.3 --executables
 sudo systemctl start oxidized.service
 sudo systemctl --no-pager --full status oxidized.service
 ```
