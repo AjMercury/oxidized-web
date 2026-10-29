@@ -7,16 +7,33 @@
 - if params[:notice]
   .alert.alert-success{role: 'status'} Device #{params[:notice]} successfully.
 - if @inventory_error
-  .alert.alert-warning{role: 'status'}= @inventory_error
+  .alert.alert-warning.inventory-source-alert{role: 'status'}
+    %strong Device management is unavailable for this inventory
+    %p.mb-0= @inventory_error
 - elsif !%w[name model ip].all? { |field| @device_fields.include?(field) }
   .alert.alert-warning{role: 'status'}
-    Device creation needs CSV mappings for hostname, model, and management address (`name`, `model`, and `ip`). Add those mappings to the existing Oxidized configuration before enabling writes.
+    Device management is read-only until the existing CSV source maps hostname, model, and management address (`name`, `model`, and `ip`). No inventory data has been changed.
 
 .section-heading
   .section-heading-copy
     %h2= @current_admin == :viewer ? 'Inventory access' : 'Add device'
     %p= @current_admin == :viewer ? 'Your account has read-only access to the configured Oxidized inventory.' : 'Credentials are written only to the configured CSV source and are never returned by the management API.'
-- if @current_admin != :viewer
+- if @current_admin != :viewer && @inventory_error
+  .table-card.inventory-unavailable-card
+    .inventory-unavailable-icon
+      %i.bi.bi-database-exclamation{:'aria-hidden' => 'true'}
+    .inventory-unavailable-copy
+      - if @inventory_mapping_error
+        %h3 The configured CSV schema needs attention
+        %p Oxidized Web will only write to the active inventory after its field mapping is explicit. Check the actual column order in the existing inventory, then add matching positions to your Oxidized configuration.
+        %pre
+          %code= "source:\n  csv:\n    map:\n      name: <column index>\n      model: <column index>\n      ip: <column index>"
+        %small Example only: replace each placeholder with the zero-based index from your existing CSV. Do not copy these placeholders as literal values.
+      - else
+        %h3 The configured inventory is read-only in Web
+        %p= @inventory_error
+        %small No alternate inventory was created and no source data was changed.
+- elsif @current_admin != :viewer
   .table-card.device-form-card
     %form{action: url_for('/admin/devices'), method: 'post', autocomplete: 'off'}
       %input{type: 'hidden', name: 'csrf_token', value: @csrf_token}
@@ -121,7 +138,7 @@
             %td= node[:group]
             %td
               %span.status-pill{class: "status-#{node[:backup_state]}"}= node[:backup_state].to_s.tr('_', ' ')
-            %td.time.text-nowrap{epoch: node[:last_attempt_at] ? node[:last_attempt_at].to_time.to_i : ''}= node[:last_attempt_at] || 'Not checked this session'
+            %td.time.text-nowrap{epoch: node[:last_attempt_at] && node[:last_attempt_at].to_time.to_i}= node[:last_attempt_at] || 'Not checked this session'
             %td.actions-cell
               - if @current_admin != :viewer
                 %a.action-link{title: 'Edit device', :'aria-label' => "Edit #{node[:name]}", href: url_for("/admin/devices/#{node[:name]}/edit")}

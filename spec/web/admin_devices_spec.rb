@@ -105,6 +105,33 @@ describe 'administrator device management' do
     _(last_response.body).must_match(%r{</select>\s*<form[^>]*id="bulkDevices"}m)
   end
 
+  it 'explains an incomplete CSV mapping instead of rendering an empty Add Device form' do
+    csv = AdminDevicesSpecCsv.new(@path, /:/, { name: 0, model: 1 }, { username: 4 }, false)
+    Oxidized.stubs(:config).returns(AdminDevicesSpecConfig.new(AdminDevicesSpecSource.new(csv)))
+
+    get '/admin/devices', {}, admin_headers
+
+    _(last_response.ok?).must_equal true
+    _(last_response.body).must_include('source.csv.map is missing required Core fields: ip')
+    _(last_response.body).must_include('Check the actual column order')
+    _(last_response.body).must_include('Example only: replace each placeholder')
+    _(last_response.body).wont_include('class="device-form-card"')
+    _(last_response.body).wont_include('name="password"')
+  end
+
+  it 'identifies a non-CSV source as read-only without showing CSV mapping instructions' do
+    @nodes.stubs(:source).returns('netbox')
+
+    get '/admin/devices', {}, admin_headers
+
+    _(last_response.ok?).must_equal true
+    _(last_response.body).must_include('The configured inventory is read-only in Web')
+    _(last_response.body).must_include('Device management supports only a CSV inventory source.')
+    _(last_response.body).wont_include('source.csv.map is missing required Core fields')
+    _(last_response.body).wont_include('name: &lt;column index&gt;')
+    _(last_response.body).wont_include('class="device-form-card"')
+  end
+
   it 'explains why device management is disabled when administrator credentials are missing' do
     @auth_store = Oxidized::API::UserStore.new(File.join(@directory, 'empty.sqlite3'))
     app.set(:auth_store, @auth_store)

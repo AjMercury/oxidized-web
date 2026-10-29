@@ -289,6 +289,7 @@ module Oxidized
           @group_assignable = @inventory.group_assignable?
         rescue DeviceInventory::Error => e
           @inventory_error = e.message
+          @inventory_mapping_error = e.message.include?('source.csv.map is missing required Core fields')
           @device_fields = []
         end
         @models = available_models
@@ -950,12 +951,22 @@ module Oxidized
       end
 
       def timestamp_time(value)
-        return value if value.is_a?(Time)
+        if value.is_a?(Time)
+          return nil unless value.to_f.positive?
+
+          return value
+        end
 
         text = value.to_s
-        return Time.at(text.to_i) if text.match?(/\A\d+\z/)
+        if text.match?(/\A\d+\z/)
+          epoch = text.to_i
+          return nil unless epoch.positive?
 
-        Time.parse(text)
+          return Time.at(epoch)
+        end
+
+        parsed = Time.parse(text)
+        parsed if parsed.to_f.positive?
       rescue ArgumentError, TypeError
         nil
       end

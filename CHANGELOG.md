@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.24.1] - 2026-10-29
+
+### Fixed
+- Reject zero, missing, and pre-epoch backup timestamps so an absent attempt is never rendered as January 1, 1970; preserve valid positive timestamps.
+- Replace the empty device creation panel with a fail-closed explanation when CSV mappings are incomplete, including the missing Core fields and safe mapping guidance.
+- Identify non-CSV inventory sources as read-only without displaying misleading CSV migration instructions or creating a secondary inventory.
+- Remove the redundant Configuration Search sidebar item while keeping the existing top-bar search and history routes intact.
+- Refine the compact Enterprise palette, table density, mobile layouts, and configuration comparison panel sizing.
+
+### Compatibility and verification
+- Compatible target: Oxidized Core 0.37.2; Core runtime code is unchanged. Web release: 0.24.1.
+- Web Ruby suite: 124 runs / 615 assertions, 0 failures / errors, 4 skips on Windows Ruby 3.2.11. JavaScript: 14/14 passed. Focused Core RouterOS suite: 6 runs / 45 assertions passed.
+- Full Core suite has known Windows-specific path and POSIX signal failures; Linux/Ubuntu 24.04 validation was not available. Synthetic HTTPS Chrome checks covered the requested pages at six viewport sizes, with no page-level horizontal overflow or browser errors observed.
+- The RouterOS timestamp filter exists in Core 0.37.2 and its focused model-to-Git fixture checks pass. Production runtime model/Gem paths cannot be verified without server access; no Core version bump is included.
+
 ## [0.24.0] - 2026-10-29
 
 ### Added

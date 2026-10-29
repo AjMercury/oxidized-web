@@ -30,7 +30,14 @@ module Oxidized
         @map = normalize_mapping(@csv.map)
         @vars_map = normalize_mapping(@csv.vars_map)
         raise Error.new('A CSV field cannot be mapped as both a node field and a node variable.', status: 409) unless (@map.keys & @vars_map.keys).empty?
-        raise Error.new('CSV source mapping must include name, model, and management address (ip).', status: 409) unless %i[name model ip].all? { |key| @map.has_key?(key) }
+
+        missing = %i[name model ip] - @map.keys
+        return if missing.empty?
+
+        raise Error.new(
+          "Device management is read-only because source.csv.map is missing required Core fields: #{missing.join(', ')}. Add explicit zero-based column mappings for name, model, and ip using the existing CSV column order, then restart Oxidized. No inventory data was changed.",
+          status: 409
+        )
       end
 
       def fields

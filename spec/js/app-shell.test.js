@@ -67,7 +67,7 @@ function setup() {
     getElementById: (id) => ({ 'sidebar-toggle': toggle, 'sidebar-collapse-toggle': collapseToggle, 'app-sidebar': sidebar,
       'global-config-search': search }[id] || null),
     querySelectorAll: () => [],
-    querySelector: () => ({ href: '#global-config-search', ...link })
+    querySelector: () => null
   };
   const windowListeners = {};
   let isMobile = true;
@@ -116,15 +116,11 @@ test('outside click closes the mobile menu', () => {
   assert.equal(ui.attributes['aria-expanded'], 'false');
 });
 
-test('configuration search navigation focuses search and closes the menu', () => {
+test('configuration search remains in the top bar without a redundant sidebar shortcut', () => {
   const ui = setup();
-  ui.buttonListeners.click();
-  let prevented = false;
-  ui.linkListeners.click({ preventDefault() { prevented = true; } });
 
-  assert.equal(prevented, true);
-  assert.equal(ui.search.focused, true);
-  assert.equal(ui.document.body.classList.contains('sidebar-open'), false);
+  assert.equal(ui.search !== null, true);
+  assert.equal(Object.keys(ui.linkListeners).length, 0);
 });
 
 test('resizing to desktop removes the mobile inert state', () => {

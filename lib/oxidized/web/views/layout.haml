@@ -32,9 +32,6 @@
                           :'aria-current' => current_path == '/nodes/stats' ? 'page' : nil}
               %i.bi.bi-activity{:'aria-hidden' => 'true'}
               %span Backup health
-            %a.sidebar-link{href: url_for('/nodes#global-config-search'), title: 'Configuration search'}
-              %i.bi.bi-search{:'aria-hidden' => 'true'}
-              %span Configuration search
         %details.sidebar-nav-group{open: true}
           %summary.sidebar-section-label Devices
           %nav.sidebar-nav
