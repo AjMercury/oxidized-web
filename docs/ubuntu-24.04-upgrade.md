@@ -1,6 +1,6 @@
 # Ubuntu 24.04: Enterprise upgrade to Core 0.37.3 + Web 0.25.0
 
-This release pairs the manual backup queue in [Core PR #1](https://github.com/AjMercury/oxidized/pull/1) with the interface in [Web PR #1](https://github.com/AjMercury/oxidized-web/pull/1). Merge both into their respective `master` branches before using the commands below. These are the AjMercury forks; do not substitute the upstream repositories or RubyGems releases.
+This release pairs the manual backup queue in [Core PR #1](https://github.com/AjMercury/oxidized/pull/1) with the interface in [Web PR #1](https://github.com/AjMercury/oxidized-web/pull/1). The main-branch procedure requires both PRs to be merged; the open-PR procedure below builds the reviewed branch directly. These are the AjMercury forks; do not substitute the upstream repositories or RubyGems releases.
 
 The reported service runs `/usr/bin/ruby3.2 /usr/local/bin/oxidized`. The executable location of Oxidized does not establish the location of the `gem` command: `/usr/local/bin/gem` may not exist. Invoke RubyGems through the service's Ruby interpreter instead. Check `systemctl show oxidized.service --property=ExecStart` and retain any configured `GEM_HOME`/`GEM_PATH` if your service uses a custom gem environment. Keep the current SQLite authentication database, CSV source, configuration and Git repository paths. A routine update does not need administrator bootstrapping.
 
@@ -16,6 +16,45 @@ oxgem_root() {
 }
 oxgem --version
 ```
+
+## Build and install the open PRs without uploaded Gem files
+
+Run this complete block as root on the reported Ubuntu installation. It builds the two Gems on the server, so nothing needs to exist in `/tmp` beforehand. It restarts the currently running service only after both installations and the version check succeed. Keep the existing configuration/data backup as described below.
+
+```sh
+(
+set -e
+oxgem() {
+  /usr/bin/ruby3.2 -r rubygems/gem_runner -e 'Gem::GemRunner.new.run(ARGV)' -- "$@"
+}
+oxgem --version
+if ! command -v git >/dev/null; then
+  apt-get update
+  apt-get install -y git
+fi
+OX_BUILD="$(mktemp -d /tmp/oxidized-update.XXXXXX)"
+git clone --depth 1 --branch codex/enterprise-integration https://github.com/AjMercury/oxidized.git "$OX_BUILD/core"
+git clone --depth 1 --branch codex/enterprise-integration https://github.com/AjMercury/oxidized-web.git "$OX_BUILD/web"
+(cd "$OX_BUILD/core" && oxgem build oxidized.gemspec)
+(cd "$OX_BUILD/web" && oxgem build oxidized-web.gemspec)
+oxgem install --local --no-document "$OX_BUILD/core/oxidized-0.37.3.gem"
+oxgem install --local --no-document "$OX_BUILD/web/oxidized-web-0.25.0.gem"
+/usr/bin/ruby3.2 -e '
+require "oxidized"
+require "oxidized/web"
+%w[oxidized oxidized-web].each do |name|
+  spec = Gem.loaded_specs.fetch(name)
+  puts "#{name}: #{spec.version}"
+end
+abort "Unexpected loaded versions" unless Gem.loaded_specs.fetch("oxidized").version.to_s == "0.37.3" && Gem.loaded_specs.fetch("oxidized-web").version.to_s == "0.25.0"
+'
+systemctl restart oxidized.service
+sleep 3
+systemctl --no-pager --full status oxidized.service
+)
+```
+
+Version reporting uses the activated Gem specifications. Merely requiring `oxidized/web` does not load its version constant until WebApp is initialized, so reading `Oxidized::API::WEB_VERSION` at that point can raise NameError even when the Gem is installed correctly.
 
 ## Build from the merged main branches
 
@@ -53,7 +92,7 @@ oxgem_root install --local --no-document "$OX_BUILD/oxidized/oxidized-0.37.3.gem
 oxgem_root install --local --no-document "$OX_BUILD/oxidized-web/oxidized-web-0.25.0.gem"
 sudo systemctl start oxidized.service
 sudo systemctl --no-pager --full status oxidized.service
-sudo -u oxidized -H "$OX_RUBY" -e 'require "oxidized"; require "oxidized/web"; puts "Core #{Oxidized::VERSION}; Web #{Oxidized::API::WEB_VERSION}"'
+sudo -u oxidized -H "$OX_RUBY" -e 'require "oxidized"; require "oxidized/web"; %w[oxidized oxidized-web].each { |name| puts "#{name}: #{Gem.loaded_specs.fetch(name).version}" }'
 ```
 
 Install Core first because Web 0.25.0 declares Core >= 0.37.3. `--local` uses the built packages and already installed dependencies; it does not publish either Gem. If dependency installation fails, resolve it in the service's existing Ruby environment before starting the update again.
