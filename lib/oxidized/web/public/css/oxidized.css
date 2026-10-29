@@ -3938,7 +3938,9 @@ body {
 }
 .btn-primary,
 .btn-outline-primary {
-  transition: transform var(--ow-transition-fast), box-shadow var(--ow-transition-fast);
+  transition:
+    transform var(--ow-transition-fast),
+    box-shadow var(--ow-transition-fast);
 }
 .dt-container .pagination {
   --bs-pagination-color: var(--ow-color-accent);
@@ -3963,16 +3965,24 @@ body {
   border-radius: 10px;
   backdrop-filter: none;
 }
-.login-brand small, .login-heading p, .login-heading .eyebrow, .login-security {
+.login-brand small,
+.login-heading p,
+.login-heading .eyebrow,
+.login-security {
   color: var(--ow-color-text-muted);
 }
-.login-card .form-label { color: var(--ow-color-text); }
+.login-card .form-label {
+  color: var(--ow-color-text);
+}
 .login-card .form-control {
   background: var(--ow-color-surface-muted);
   border-color: var(--ow-color-border);
   color: var(--ow-color-text);
 }
-.login-card .form-control::placeholder, .password-toggle { color: var(--ow-color-text-muted); }
+.login-card .form-control::placeholder,
+.password-toggle {
+  color: var(--ow-color-text-muted);
+}
 .login-theme-toggle {
   background: var(--ow-color-surface-muted);
   border-color: var(--ow-color-border);
