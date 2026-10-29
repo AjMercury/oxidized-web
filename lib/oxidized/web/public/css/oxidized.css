@@ -3998,3 +3998,72 @@ body {
     padding: 4px 8px;
   }
 }
+
+/* Keep table actions legible and separated at every inventory width. */
+#nodesTable .actions-cell,
+#managedDevices .actions-cell {
+  min-width: 280px;
+  white-space: normal;
+  vertical-align: middle;
+}
+.actions-cell > a,
+.actions-cell > form {
+  display: inline-flex;
+  position: static;
+  vertical-align: middle;
+  margin: 3px;
+}
+.actions-cell .inline-action { float: none; }
+.actions-cell .action-link,
+.actions-cell .btn-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 6px 9px;
+  border: 1px solid var(--ow-color-border);
+  border-radius: 7px;
+  background: var(--ow-color-surface-muted);
+  color: var(--ow-color-text);
+  white-space: nowrap;
+}
+.actions-cell form[action*="/node/next/"] button {
+  border-color: var(--ow-color-accent);
+  background: var(--ow-color-accent-soft);
+  color: var(--ow-color-accent);
+  font-weight: 650;
+}
+[data-bs-theme="dark"] .table {
+  --bs-table-bg: var(--ow-color-surface);
+  --bs-table-color: var(--ow-color-text);
+  --bs-table-border-color: var(--ow-color-border);
+  --bs-table-hover-bg: var(--ow-color-surface-muted);
+  --bs-table-hover-color: var(--ow-color-text);
+}
+[data-bs-theme="dark"] .form-control,
+[data-bs-theme="dark"] .form-select {
+  background-color: var(--ow-color-surface-muted);
+  color: var(--ow-color-text);
+  border-color: var(--ow-color-border);
+}
+[data-bs-theme="dark"] .status-pill {
+  border-width: 1px;
+  border-style: solid;
+}
+[data-bs-theme="dark"] .status-pill.status-success {
+  background: var(--ow-color-success-soft);
+  color: var(--ow-color-success);
+  border-color: var(--ow-color-success);
+}
+[data-bs-theme="dark"] .status-pill.status-no_connection,
+[data-bs-theme="dark"] .status-pill.status-failure {
+  background: var(--ow-color-danger-soft);
+  color: var(--ow-color-danger);
+  border-color: var(--ow-color-danger);
+}
+[data-bs-theme="dark"] .status-pill.status-not_checked_this_session {
+  background: var(--ow-color-accent-soft);
+  color: var(--ow-color-accent);
+  border-color: var(--ow-color-accent);
+}

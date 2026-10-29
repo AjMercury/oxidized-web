@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.25.1] - 2026-10-29
+
+### Fixed
+- Separate inventory row actions and give Backup Now a labeled, bordered control with sufficient column width.
+- Strengthen dark table, form and status colors using the approved theme tokens.
+- Bump the stylesheet cache version so deployed browsers receive the corrections.
+
 ## [0.25.0] - 2026-10-29
 
 ### Added
