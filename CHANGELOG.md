@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.25.3] - 2026-10-30
+
+### Fixed
+- Read CSV mappings from Asetus configuration objects so Device Management recognizes the configured `source.csv.map` fields.
+
 ## [0.25.2] - 2026-10-29
 
 ### Fixed

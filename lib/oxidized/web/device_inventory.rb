@@ -118,7 +118,8 @@ module Oxidized
       private
 
       def normalize_mapping(mapping)
-        mapping.to_h.each_with_object({}) do |(key, position), normalized|
+        normalized = {}
+        mapping.each do |key, position|
           index = Integer(position)
           raise Error.new('CSV field mappings must use non-negative integer positions.', status: 409) if index.negative?
 
@@ -126,6 +127,7 @@ module Oxidized
         rescue ArgumentError, TypeError
           raise Error.new('CSV field mappings must use non-negative integer positions.', status: 409)
         end
+        normalized
       end
 
       def serializable_delimiter(delimiter)
