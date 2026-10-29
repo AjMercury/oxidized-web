@@ -77,7 +77,8 @@ describe 'administrator device management' do
     app.set(:nodes, @nodes)
     app.set(:configuration, {
               hide_node_vars: %w[enable password],
-              admin_username: 'admin', admin_password: 'correct-horse'
+              admin_username: 'admin', admin_password: 'correct-horse',
+              viewer_username: 'viewer', viewer_password: 'read-only'
             })
   end
 
@@ -94,7 +95,20 @@ describe 'administrator device management' do
     _(last_response.ok?).must_equal true
     _(last_response.body).must_include('Device management')
     _(last_response.body).must_include('Management IP / FQDN')
-    _(last_response.body).must_include('Select an Oxidized model')
+    _(last_response.body).must_include('Search installed Core models')
+    _(last_response.body).must_include('All vendors')
+    _(last_response.body).must_include('Cisco')
+  end
+
+  it 'allows a configured read-only role to view inventory but denies writes' do
+    viewer_headers = { 'HTTP_AUTHORIZATION' => "Basic #{Base64.strict_encode64('viewer:read-only')}" }
+    get '/admin/devices', {}, viewer_headers
+    _(last_response.ok?).must_equal true
+    _(last_response.body).must_include('read-only access')
+    _(last_response.body).wont_include('id="bulkDevices"')
+
+    post '/admin/devices.json', { name: 'reader-write', model: 'ios', ip: '192.0.2.3' }, viewer_headers
+    _(last_response.status).must_equal 401
   end
 
   it 'protects source reload routes with a format suffix' do

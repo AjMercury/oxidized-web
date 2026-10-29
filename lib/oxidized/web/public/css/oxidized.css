@@ -896,6 +896,58 @@ select:focus-visible {
   }
 }
 
+/* Compact vendor identity marks use text labels and the shared network glyph;
+   a vendor specific asset can replace the glyph without changing table layout. */
+.vendor-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 14px 0 24px;
+}
+.vendor-summary-item {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--ow-color-border);
+  border-radius: 999px;
+  background: var(--ow-color-surface);
+  color: var(--ow-color-text-muted);
+  font-size: 11px;
+}
+.vendor-summary-item strong { color: var(--ow-color-text); }
+.vendor-mark {
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
+  align-items: center;
+  justify-content: center;
+  margin-right: 5px;
+  border-radius: 6px;
+  background: var(--ow-color-surface-muted);
+  color: var(--ow-color-accent);
+  vertical-align: middle;
+}
+.vendor-cisco { color: #049fd9; }
+.vendor-mikrotik { color: #c8102e; }
+.vendor-juniper { color: #84bd00; }
+.vendor-fortinet { color: #da291c; }
+.vendor-huawei { color: #cf0a2c; }
+.vendor-aruba { color: #ff8300; }
+.vendor-ubiquiti { color: #0559c9; }
+.vendor-arista { color: #e50000; }
+.vendor-dell { color: #0076ce; }
+.vendor-hpe { color: #01a982; }
+.table-toolbar .inventory-filter { flex: 0 1 170px; }
+.vendor-cell { white-space: nowrap; }
+#managedDevices { min-width: 930px; }
+@media (max-width: 767.98px) {
+  .table-toolbar { flex-wrap: wrap; }
+  .table-toolbar .table-search { flex: 1 1 100%; }
+  .table-toolbar .inventory-filter { flex: 1 1 140px; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

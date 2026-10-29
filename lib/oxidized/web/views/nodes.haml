@@ -3,6 +3,7 @@
 - failed_nodes = @data.count { |node| node[:status].to_s == 'no_connection' }
 - nodes_without_history = @data.count { |node| node[:status].to_s == 'never' }
 - recent_changes = @data.select { |node| node[:mtime] }.sort_by { |node| node[:mtime].to_i }.reverse.first(5)
+- vendor_counts = @data.group_by { |node| vendor_for_model(node[:model]) }.transform_values(&:count).sort_by { |vendor, count| [-count, vendor] }
 
 .page-heading
   .page-heading-copy
@@ -54,12 +55,35 @@
     %h2 Managed devices
     %p Search, filter, inspect configuration history, or trigger a backup.
 
+.vendor-summary{:'aria-label' => 'Devices by vendor'}
+  - vendor_counts.each do |vendor, count|
+    .vendor-summary-item
+      %span.vendor-mark{class: "vendor-#{vendor_logo(vendor)}", :'aria-hidden' => 'true'}
+        %i.bi.bi-hdd-network
+      %span= vendor
+      %strong= count
+
 .table-card
   .table-toolbar
     .table-search
       %i.bi.bi-search{:'aria-hidden' => 'true'}
       %label.visually-hidden{for: 'inventorySearch'} Search device inventory
       %input#inventorySearch{type: 'search', placeholder: 'Search name, address, model, or group…'}
+    %label.visually-hidden{for: 'vendorFilter'} Filter by vendor
+    %select.form-select.form-select-sm.inventory-filter#vendorFilter{style: 'max-width: 170px'}
+      %option{value: ''} All vendors
+      - @data.map { |node| vendor_for_model(node[:model]) }.uniq.sort.each do |vendor|
+        %option{value: vendor}= vendor
+    %label.visually-hidden{for: 'modelFilter'} Filter by model
+    %select.form-select.form-select-sm.inventory-filter#modelFilter{style: 'max-width: 170px'}
+      %option{value: ''} All models
+      - @data.map { |node| node[:model].to_s }.uniq.sort.each do |model|
+        %option{value: model}= model
+    %label.visually-hidden{for: 'statusFilter'} Filter by backup status
+    %select.form-select.form-select-sm.inventory-filter#statusFilter{style: 'max-width: 170px'}
+      %option{value: ''} All backup states
+      - @data.map { |node| node[:status].to_s.tr('_', ' ') }.uniq.sort.each do |status|
+        %option{value: status}= status
     %button.btn.btn-outline-secondary.btn-sm#resetSearch{type: 'button'}
       %i.bi.bi-eraser{:'aria-hidden' => 'true'}
       Clear search
@@ -69,8 +93,10 @@
         %tr
           %th Device
           %th Address
+          %th Vendor
           %th Platform / model
           %th.version-sort Software version
+          %th Revision count
           %th Group
           %th Latest backup
           %th Last backup time
@@ -82,16 +108,21 @@
             %td.device-cell
               %a.device-name{href: url_for("/node/show/#{node[:name]}")}= node[:name]
               %span.device-subtitle= node[:full_name] unless node[:full_name] == node[:name]
-            %td.text-muted= node[:ip]
+            %td.text-muted{:'data-order' => node[:ip]}= node[:ip]
+            %td.vendor-cell
+              %span.vendor-mark{class: "vendor-#{vendor_logo(node[:model])}", title: vendor_for_model(node[:model])}
+                %i.bi.bi-hdd-network{:'aria-hidden' => 'true'}
+              = vendor_for_model(node[:model])
             %td
               %a.model-link{href: url_for("/nodes/model/#{node[:model]}")}= node[:model]
             %td{:'data-order' => node.dig(:vars, 'version') || node[:version] || 'Unknown'}= node.dig(:vars, 'version') || node[:version] || 'Unknown'
+            %td.text-end{:'data-order' => node[:revision_count].nil? ? -1 : node[:revision_count]}= node[:revision_count].nil? ? 'Unknown' : node[:revision_count]
             %td
               %a.group-link{href: url_for("/nodes/group/#{node[:group]}")}= node[:group]
             %td
               %span{title: node[:status].to_s.tr('_', ' '), class: node[:status].to_s}= node[:status].to_s.tr('_', ' ')
-            %td.time.text-nowrap{epoch: node[:time] ? node[:time].to_i : ''}= node[:time]
-            %td.time.text-nowrap{epoch: node[:mtime] ? node[:mtime].to_i : ''}= node[:mtime]
+            %td.time.text-nowrap{epoch: node[:time] && node[:time] != 'never' ? node[:time].to_i : '', :'data-order' => node[:time] && node[:time] != 'never' ? node[:time].to_i : 0}= node[:time]
+            %td.time.text-nowrap{epoch: node[:mtime] ? node[:mtime].to_i : '', :'data-order' => node[:mtime] ? node[:mtime].to_i : 0}= node[:mtime]
             %td.actions-cell
               %a.action-link{title: 'Download current configuration', :'aria-label' => "Download configuration for #{node[:name]}", href: url_for("/node/fetch/#{node[:full_name]}")}
                 %i.bi.bi-cloud-download{:'aria-hidden' => 'true'}
@@ -105,9 +136,8 @@
   $(function() {
     var table = $('#nodesTable').DataTable({
       columnDefs: [
-        { target: 1, visible: false },
-        { targets: 3, type: 'version-sort' },
-        { targets: [0, 8], className: 'noVis' },
+        { targets: 4, type: 'version-sort' },
+        { targets: [0, 10], className: 'noVis' },
       ],
       buttons: [{
         extend: 'colvis',
@@ -127,10 +157,14 @@
     $('#inventorySearch').on('input', function() {
       table.search(this.value).draw();
     });
+    $('#vendorFilter').on('change', function() { table.column(2).search(this.value, false, false).draw(); });
+    $('#modelFilter').on('change', function() { table.column(3).search(this.value, false, false).draw(); });
+    $('#statusFilter').on('change', function() { table.column(7).search(this.value, false, false).draw(); });
     $('#resetSearch').on('click', function() {
       $('#inventorySearch').val('');
       table.search('').draw();
       table.columns().search('').draw();
+      $('.inventory-filter').val('');
     });
   });
 

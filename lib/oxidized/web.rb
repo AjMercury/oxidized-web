@@ -59,7 +59,9 @@ module Oxidized
         hide_node_vars = hide_node_vars.map(&:to_sym)
         admin_configuration = {
           admin_username: ENV.fetch('OXIDIZED_WEB_ADMIN_USERNAME', nil),
-          admin_password: ENV.fetch('OXIDIZED_WEB_ADMIN_PASSWORD', nil)
+          admin_password: ENV.fetch('OXIDIZED_WEB_ADMIN_PASSWORD', nil),
+          viewer_username: ENV.fetch('OXIDIZED_WEB_VIEWER_USERNAME', nil),
+          viewer_password: ENV.fetch('OXIDIZED_WEB_VIEWER_PASSWORD', nil)
         }.compact
         {
           addr: configuration.listen? || DEFAULT_HOST,
@@ -81,7 +83,9 @@ module Oxidized
         end
         admin_configuration = {
           admin_username: ENV.fetch('OXIDIZED_WEB_ADMIN_USERNAME', nil),
-          admin_password: ENV.fetch('OXIDIZED_WEB_ADMIN_PASSWORD', nil)
+          admin_password: ENV.fetch('OXIDIZED_WEB_ADMIN_PASSWORD', nil),
+          viewer_username: ENV.fetch('OXIDIZED_WEB_VIEWER_USERNAME', nil),
+          viewer_password: ENV.fetch('OXIDIZED_WEB_VIEWER_PASSWORD', nil)
         }.compact
         {
           addr: addr,

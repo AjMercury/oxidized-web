@@ -17,10 +17,16 @@
             %input.form-control{id: "device-#{field}", name: input_name, type: 'text', value: field == 'name' ? @device[:name] : @device[field.to_sym], required: %w[name ip].include?(field), autocomplete: 'off'}
       - if @device_fields.include?('model')
         .mb-3
-          %label.form-label{for: 'device-model'} Vendor / model
-          %select.form-select#device-model{name: 'model', required: true}
+          %label.form-label{for: 'device-vendor'} Vendor
+          %select.form-select#device-vendor{:'aria-label' => 'Filter models by vendor'}
+            %option{value: ''} All vendors
+            - @models.map { |model| vendor_for_model(model) }.uniq.sort.each do |vendor|
+              %option{value: vendor, selected: vendor_for_model(@device[:model]) == vendor}= vendor
+          %label.form-label.mt-2{for: 'device-model'} Oxidized model
+          %input.form-control#device-model{name: 'model', type: 'search', list: 'oxidized-model-list', value: @device[:model], required: true, autocomplete: 'off'}
+          %datalist#oxidized-model-list
             - @models.each do |model|
-              %option{value: model, selected: @device[:model].to_s == model}= model
+              %option{value: model, :'data-vendor' => vendor_for_model(model)}
       - [['password', 'Password'], ['enable', 'Enable password'], ['ssh_port', 'SSH port'], ['telnet_port', 'Telnet port'], ['timeout', 'Connection timeout'], ['input', 'Connection protocol'], ['description', 'Description']].each do |field, label|
         - if @device_fields.include?(field)
           .mb-3
@@ -30,3 +36,13 @@
     .device-form-actions
       %a.btn.btn-outline-secondary{href: url_for('/admin/devices')} Cancel
       %button.btn.btn-primary{type: 'submit'} Save changes
+:javascript
+  $(function() {
+    var models = Array.from(document.querySelectorAll('#oxidized-model-list option'));
+    $('#device-vendor').on('change', function() {
+      var vendor = this.value;
+      models.forEach(function(option) { option.disabled = !!vendor && option.dataset.vendor !== vendor; });
+      var current = document.getElementById('device-model');
+      if (vendor && current.value && !models.some(function(option) { return option.value === current.value && option.dataset.vendor === vendor; })) current.value = '';
+    });
+  });

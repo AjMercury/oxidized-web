@@ -23,7 +23,12 @@ module Oxidized
         admin_path = request.path_info.match?(%r{\A/reload(?:\.[^/]+)?\z}) ||
                      request.path_info.start_with?('/admin/devices', '/node/next/')
         if admin_path
-          authenticate_admin!
+          if request.request_method == 'GET'
+            @current_admin = authenticate_management_user!
+            halt 403, 'This account has read-only inventory access.' if @current_admin == :viewer && request.path_info.end_with?('/edit')
+          else
+            authenticate_admin!
+          end
           verify_admin_origin! unless request.request_method == 'GET'
         end
       end
@@ -60,6 +65,7 @@ module Oxidized
             node[:status] = node[:last][:status]
             node[:time]   = node[:last][:end]
           end
+          node[:revision_count] = revision_count_for(node)
           node
         end
         out :nodes
@@ -75,6 +81,7 @@ module Oxidized
             node[:status] = node[:last][:status]
             node[:time]   = node[:last][:end]
           end
+          node[:revision_count] = revision_count_for(node)
           node
         end
         out :nodes
@@ -135,6 +142,18 @@ module Oxidized
         raise DeviceInventory::Error, 'Select at least one device.' if names.empty?
 
         case params['operation']
+        when 'export'
+          require 'csv'
+          selected = inventory_nodes.select { |node| names.include?(node[:name].to_s) }
+          raise DeviceInventory::Error.new('One or more selected devices are no longer in the inventory.', status: 409) unless selected.length == names.length
+
+          names.each { |name| audit_admin!('export', name) }
+          content_type 'text/csv'
+          headers['Content-Disposition'] = 'attachment; filename="oxidized-devices-selected.csv"'
+          CSV.generate do |csv|
+            csv << %w[name ip model group status last_backup]
+            selected.each { |node| csv << [node[:name], node[:ip], node[:model], node[:group], node[:status], node[:time]] }
+          end
         when 'backup'
           known_names = inventory_nodes.map { |node| node[:name].to_s }
           unknown = names - known_names
@@ -413,6 +432,27 @@ module Oxidized
         halt 401, { 'WWW-Authenticate' => 'Basic realm="Oxidized administration", charset="UTF-8"' }, 'Administrator authentication required.'
       end
 
+      def authenticate_management_user!
+        config = admin_configuration || {}
+        admin_ready = !config[:admin_username].to_s.empty? && !config[:admin_password].to_s.empty?
+        viewer_ready = !config[:viewer_username].to_s.empty? && !config[:viewer_password].to_s.empty?
+        halt 503, 'Device management is disabled until administrator credentials are configured.' unless admin_ready
+
+        encoded = request.env['HTTP_AUTHORIZATION'].to_s[/\ABasic\s+(.+)\z/i, 1]
+        decoded = Base64.strict_decode64(encoded.to_s)
+        username, password = decoded.split(':', 2)
+        admin = secure_compare(username.to_s, config[:admin_username].to_s) &&
+                secure_compare(password.to_s, config[:admin_password].to_s)
+        viewer = viewer_ready && secure_compare(username.to_s, config[:viewer_username].to_s) &&
+                 secure_compare(password.to_s, config[:viewer_password].to_s)
+        return :admin if admin
+        return :viewer if viewer
+
+        halt 401, { 'WWW-Authenticate' => 'Basic realm="Oxidized administration", charset="UTF-8"' }, 'Device management authentication required.'
+      rescue ArgumentError
+        halt 401, { 'WWW-Authenticate' => 'Basic realm="Oxidized administration", charset="UTF-8"' }, 'Device management authentication required.'
+      end
+
       def secure_compare(left, right)
         return false unless left.bytesize == right.bytesize
 
@@ -476,6 +516,40 @@ module Oxidized
         models = %w[ios routeros]
         models.concat(Dir.glob(File.join(Oxidized::Config::MODEL_DIR, '*.rb')).map { |path| File.basename(path, '.rb') }) if defined?(Oxidized::Config::MODEL_DIR)
         models.uniq.sort
+      end
+
+      # Model names come from the active Core installation. Vendor labels are
+      # hints for inventory browsing only; model availability remains the
+      # source of truth for whether Core can retrieve a configuration.
+      def vendor_for_model(model)
+        value = model.to_s.downcase.gsub(/[^a-z0-9]/, '')
+        return 'Cisco' if value.match?(/\A(?:ios|iosxe|iosxr|nxos|asa|cisco)/)
+        return 'MikroTik' if value.include?('routeros') || value.include?('mikrotik')
+        return 'Juniper' if value.include?('junos') || value.include?('juniper')
+        return 'Arista' if value.include?('eos') || value.include?('arista')
+        return 'Fortinet' if value.include?('forti')
+        return 'Palo Alto Networks' if value.include?('panos') || value.include?('paloalto')
+        return 'Huawei' if value.include?('vrp') || value.include?('huawei')
+        return 'HPE' if value.include?('comware') || value.include?('hpe')
+        return 'Aruba' if value.include?('aruba')
+        return 'Dell' if value.include?('dellos') || value.include?('dell')
+        return 'Ubiquiti' if value.match?(/ubnt|unifi|edgeos|ubiquiti/)
+
+        'Other'
+      end
+
+      def vendor_logo(model)
+        vendor_for_model(model).downcase.gsub(/[^a-z0-9]+/, '-')
+      end
+
+      def revision_count_for(node)
+        return nil unless nodes.respond_to?(:version)
+
+        revisions = nodes.version(node[:name], node[:group])
+        revisions.length if revisions.is_a?(Array)
+      rescue StandardError => e
+        logger.warn("Unable to read backup revision count for #{node[:name]} (#{e.class})")
+        nil
       end
 
       def validate_model!(model)

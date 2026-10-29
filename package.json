@@ -7,7 +7,7 @@
     "lib": "lib"
   },
   "scripts": {
-    "test": "node --test spec/js/app-shell.test.js spec/js/theme-toggle.test.js"
+    "test": "node --test spec/js/*.test.js"
   },
   "author": "The oxidized project",
   "license": "Apache 2.0",

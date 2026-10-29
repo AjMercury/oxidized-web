@@ -14,32 +14,38 @@
 
 .section-heading
   .section-heading-copy
-    %h2 Add device
-    %p Credentials are written only to the configured CSV source and are never returned by the management API.
-.table-card.device-form-card
-  %form{action: url_for('/admin/devices'), method: 'post', autocomplete: 'off'}
-    .device-form-grid
-      - [['name', 'Hostname', 'router-01.example.net'], ['ip', 'Management IP / FQDN', '192.0.2.10'], ['group', 'Device group', 'branch'], ['username', 'Username', 'oxidized']].each do |field, label, placeholder|
-        - if @device_fields.include?(field)
+    %h2= @current_admin == :viewer ? 'Inventory access' : 'Add device'
+    %p= @current_admin == :viewer ? 'Your account has read-only access to the configured Oxidized inventory.' : 'Credentials are written only to the configured CSV source and are never returned by the management API.'
+- if @current_admin != :viewer
+  .table-card.device-form-card
+    %form{action: url_for('/admin/devices'), method: 'post', autocomplete: 'off'}
+      .device-form-grid
+        - [['name', 'Hostname', 'router-01.example.net'], ['ip', 'Management IP / FQDN', '192.0.2.10'], ['group', 'Device group', 'branch'], ['username', 'Username', 'oxidized']].each do |field, label, placeholder|
+          - if @device_fields.include?(field)
+            .mb-3
+              %label.form-label{for: "device-#{field}"}= label
+              %input.form-control{id: "device-#{field}", name: field, type: 'text', placeholder: placeholder, required: %w[name ip].include?(field), autocomplete: 'off'}
+        - if @device_fields.include?('model')
           .mb-3
-            %label.form-label{for: "device-#{field}"}= label
-            %input.form-control{id: "device-#{field}", name: field, type: 'text', placeholder: placeholder, required: %w[name ip].include?(field), autocomplete: 'off'}
-      - if @device_fields.include?('model')
-        .mb-3
-          %label.form-label{for: 'device-model'} Vendor / model
-          %select.form-select#device-model{name: 'model', required: true}
-            %option{value: ''} Select an Oxidized model
-            - @models.each do |model|
-              %option{value: model}= model
-      - [['password', 'Password'], ['enable', 'Enable password'], ['ssh_port', 'SSH port'], ['telnet_port', 'Telnet port'], ['timeout', 'Connection timeout'], ['input', 'Connection protocol'], ['description', 'Description']].each do |field, label|
-        - if @device_fields.include?(field)
-          .mb-3
-            %label.form-label{for: "device-#{field}"}= label
-            %input.form-control{id: "device-#{field}", name: field, type: %w[password enable].include?(field) ? 'password' : 'text', autocomplete: %w[password enable].include?(field) ? 'new-password' : 'off'}
-    .device-form-actions
-      %button.btn.btn-primary{type: 'submit', disabled: !%w[name model ip].all? { |field| @device_fields.include?(field) }}
-        %i.bi.bi-plus-lg{:'aria-hidden' => 'true'}
-        Add device
+            %label.form-label{for: 'device-vendor'} Vendor
+            %select.form-select#device-vendor{:'aria-label' => 'Filter models by vendor'}
+              %option{value: ''} All vendors
+              - @models.map { |model| vendor_for_model(model) }.uniq.sort.each do |vendor|
+                %option{value: vendor}= vendor
+            %label.form-label.mt-2{for: 'device-model'} Oxidized model
+            %input.form-control#device-model{name: 'model', type: 'search', list: 'oxidized-model-list', placeholder: 'Search installed Core models…', required: true, autocomplete: 'off'}
+            %datalist#oxidized-model-list
+              - @models.each do |model|
+                %option{value: model, :'data-vendor' => vendor_for_model(model)}
+        - [['password', 'Password'], ['enable', 'Enable password'], ['ssh_port', 'SSH port'], ['telnet_port', 'Telnet port'], ['timeout', 'Connection timeout'], ['input', 'Connection protocol'], ['description', 'Description']].each do |field, label|
+          - if @device_fields.include?(field)
+            .mb-3
+              %label.form-label{for: "device-#{field}"}= label
+              %input.form-control{id: "device-#{field}", name: field, type: %w[password enable].include?(field) ? 'password' : 'text', autocomplete: %w[password enable].include?(field) ? 'new-password' : 'off'}
+      .device-form-actions
+        %button.btn.btn-primary{type: 'submit', disabled: !%w[name model ip].all? { |field| @device_fields.include?(field) }}
+          %i.bi.bi-plus-lg{:'aria-hidden' => 'true'}
+          Add device
 
 .section-heading
   .section-heading-copy
@@ -50,26 +56,40 @@
       %i.bi.bi-download{:'aria-hidden' => 'true'}
       Export inventory
 .table-card
-  %form#bulkDevices{action: url_for('/admin/devices/bulk'), method: 'post', onsubmit: "return confirm(document.getElementById('bulkOperation').value === 'delete' ? 'Delete all selected devices from the configured inventory?' : (document.getElementById('bulkOperation').value === 'backup' ? 'Queue backups for all selected devices?' : 'Assign the selected devices to this group?'))"}
-    .table-toolbar
-      %label.visually-hidden{for: 'bulkOperation'} Bulk operation
-      %select.form-select.form-select-sm#bulkOperation{name: 'operation', style: 'max-width: 190px'}
-        %option{value: 'backup'} Queue backups
-        - if @group_assignable
-          %option{value: 'group'} Assign group
-        %option{value: 'delete'} Delete selected
-      - if @group_assignable
-        %label.visually-hidden{for: 'bulkGroup'} New group
-        %input.form-control.form-control-sm#bulkGroup{name: 'group', type: 'text', placeholder: 'Group', style: 'max-width: 180px'}
-      %button.btn.btn-outline-primary.btn-sm{type: 'submit'} Apply to selected
+  .table-toolbar
+    %label.visually-hidden{for: 'managedVendorFilter'} Filter devices by vendor
+    %select.form-select.form-select-sm#managedVendorFilter{style: 'max-width: 170px'}
+      %option{value: ''} All vendors
+      - @data.map { |node| vendor_for_model(node[:model]) }.uniq.sort.each do |vendor|
+        %option{value: vendor}= vendor
+    %label.visually-hidden{for: 'managedModelFilter'} Filter devices by model
+    %select.form-select.form-select-sm#managedModelFilter{style: 'max-width: 170px'}
+      %option{value: ''} All models
+      - @data.map { |node| node[:model].to_s }.uniq.sort.each do |model|
+        %option{value: model}= model
+      - if @current_admin != :viewer
+        %form#bulkDevices{action: url_for('/admin/devices/bulk'), method: 'post', onsubmit: "var op = document.getElementById('bulkOperation').value; return op === 'delete' ? confirm('Delete all selected devices from the configured inventory?') : (op === 'backup' ? confirm('Queue backups for all selected devices?') : true)"}
+          %label.visually-hidden{for: 'bulkOperation'} Bulk operation
+          %select.form-select.form-select-sm#bulkOperation{name: 'operation', style: 'max-width: 190px'}
+            %option{value: 'backup'} Queue backups
+            %option{value: 'export'} Export selected (no credentials)
+            - if @group_assignable
+              %option{value: 'group'} Assign group
+            %option{value: 'delete'} Delete selected
+          - if @group_assignable
+            %label.visually-hidden{for: 'bulkGroup'} New group
+            %input.form-control.form-control-sm#bulkGroup{name: 'group', type: 'text', placeholder: 'Group', style: 'max-width: 180px'}
+          %button.btn.btn-outline-primary.btn-sm{type: 'submit'} Apply to selected
   .table-responsive
     %table.table.table-hover.align-middle#managedDevices
       %thead
         %tr
-          %th
-            %input#selectAllDevices{type: 'checkbox', :'aria-label' => 'Select all devices'}
+          - if @current_admin != :viewer
+            %th
+              %input#selectAllDevices{type: 'checkbox', :'aria-label' => 'Select all devices'}
           %th Device
           %th Address
+          %th Vendor
           %th Model
           %th Group
           %th Status
@@ -78,31 +98,53 @@
       %tbody
         - @data.sort_by { |node| node[:name].to_s.downcase }.each do |node|
           %tr
-            %td
-              %input.device-selection{type: 'checkbox', name: 'devices[]', value: node[:name], form: 'bulkDevices', :'aria-label' => "Select #{node[:name]}"}
+            - if @current_admin != :viewer
+              %td
+                %input.device-selection{type: 'checkbox', name: 'devices[]', value: node[:name], form: 'bulkDevices', :'aria-label' => "Select #{node[:name]}"}
             %td.device-cell
               %a.device-name{href: url_for("/node/show/#{node[:name]}")}= node[:name]
             %td.text-muted= node[:ip]
+            %td.vendor-cell
+              %span.vendor-mark{class: "vendor-#{vendor_logo(node[:model])}", title: vendor_for_model(node[:model])}
+                %i.bi.bi-hdd-network{:'aria-hidden' => 'true'}
+              = vendor_for_model(node[:model])
             %td= node[:model]
             %td= node[:group]
             %td
               %span{class: "#{node[:status]}"}= node[:status].to_s.tr('_', ' ')
             %td.time.text-nowrap{epoch: node[:time] == 'never' ? '' : node[:time].to_i}= node[:time]
             %td.actions-cell
-              %a.action-link{title: 'Edit device', :'aria-label' => "Edit #{node[:name]}", href: url_for("/admin/devices/#{node[:name]}/edit")}
-                %i.bi.bi-pencil-square{:'aria-hidden' => 'true'}
-              %form.inline-action{action: url_for("/node/next/#{node[:full_name]}"), method: 'post'}
-                %button.action-link{title: 'Run configuration backup', :'aria-label' => "Run backup for #{node[:name]}", type: 'submit'}
-                  %i.bi.bi-arrow-repeat{:'aria-hidden' => 'true'}
-              %form.inline-action{action: url_for("/admin/devices/#{node[:name]}/delete"), method: 'post', onsubmit: "return confirm('Delete this device from the configured inventory?')"}
-                %button.action-link.text-danger{title: 'Delete device', :'aria-label' => "Delete #{node[:name]}", type: 'submit'}
-                  %i.bi.bi-trash{:'aria-hidden' => 'true'}
+              - if @current_admin != :viewer
+                %a.action-link{title: 'Edit device', :'aria-label' => "Edit #{node[:name]}", href: url_for("/admin/devices/#{node[:name]}/edit")}
+                  %i.bi.bi-pencil-square{:'aria-hidden' => 'true'}
+                %form.inline-action{action: url_for("/node/next/#{node[:full_name]}"), method: 'post'}
+                  %button.action-link{title: 'Run configuration backup', :'aria-label' => "Run backup for #{node[:name]}", type: 'submit'}
+                    %i.bi.bi-arrow-repeat{:'aria-hidden' => 'true'}
+                %form.inline-action{action: url_for("/admin/devices/#{node[:name]}/delete"), method: 'post', onsubmit: "return confirm('Delete this device from the configured inventory?')"}
+                  %button.action-link.text-danger{title: 'Delete device', :'aria-label' => "Delete #{node[:name]}", type: 'submit'}
+                    %i.bi.bi-trash{:'aria-hidden' => 'true'}
         - if @data.empty?
           %tr
-            %td.empty-state{colspan: 8} No devices are currently loaded from the configured inventory.
+            %td.empty-state{colspan: 9} No devices are currently loaded from the configured inventory.
 
 :javascript
   $(function() {
+    var models = Array.from(document.querySelectorAll('#oxidized-model-list option'));
+    $('#device-vendor').on('change', function() {
+      var vendor = this.value;
+      models.forEach(function(option) { option.disabled = !!vendor && option.dataset.vendor !== vendor; });
+      var current = document.getElementById('device-model');
+      if (vendor && current.value && !models.some(function(option) { return option.value === current.value && option.dataset.vendor === vendor; })) current.value = '';
+    });
+    var firstInventoryColumn = #{@current_admin == :viewer ? 0 : 1};
+    var managed = $('#managedDevices').DataTable({
+      autoWidth: false,
+      order: [[firstInventoryColumn, 'asc']],
+      columnDefs: [{ targets: #{@current_admin == :viewer ? 7 : 0}, orderable: false, searchable: false }, { targets: #{@current_admin == :viewer ? 7 : 8}, orderable: false, searchable: false }],
+      stateSave: true
+    });
+    $('#managedVendorFilter').on('change', function() { managed.column(firstInventoryColumn + 2).search(this.value, false, false).draw(); });
+    $('#managedModelFilter').on('change', function() { managed.column(firstInventoryColumn + 3).search(this.value, false, false).draw(); });
     $('#selectAllDevices').on('change', function() {
       $('.device-selection').prop('checked', this.checked);
     });

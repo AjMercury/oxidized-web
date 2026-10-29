@@ -6,7 +6,10 @@
       %span= @data[:name]
     %span.eyebrow.text-muted Device details
     %h1= @data[:name]
-    %p Node metadata as reported by Oxidized.
+    %p
+      %span.vendor-mark{class: "vendor-#{vendor_logo(@data[:model])}", title: vendor_for_model(@data[:model])}
+        %i.bi.bi-hdd-network{:'aria-hidden' => 'true'}
+      #{vendor_for_model(@data[:model])} · #{@data[:model]} · Node metadata as reported by Oxidized.
   .page-heading-actions
     %a.btn.btn-outline-secondary{href: url_for("/node/fetch/#{@data[:full_name]}")}
       %i.bi.bi-cloud-download{:'aria-hidden' => 'true'}
