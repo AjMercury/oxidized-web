@@ -164,6 +164,10 @@ describe 'Web authentication' do
     get '/admin/users', {}, 'HTTP_COOKIE' => "oxidized_web_session=#{token[:id]}"
     _(last_response.status).must_equal 200
 
+    get '/admin/users/new', {}, 'HTTP_COOKIE' => "oxidized_web_session=#{token[:id]}"
+    _(last_response.status).must_equal 200
+    _(last_response.body).must_include('required-indicator')
+
     post '/logout', {}, 'HTTP_COOKIE' => "oxidized_web_session=#{token[:id]}"
     _(last_response.status).must_equal 403
   end

@@ -6,10 +6,13 @@
 - if @form_error
   .alert.alert-danger{role: 'alert'}= @form_error
 .table-card.profile-card
-  %form{action: url_for(@user[:id] ? "/admin/users/#{@user[:id]}" : '/admin/users'), method: 'post', autocomplete: 'off'}
+  %form{action: url_for(@user[:id] ? "/admin/users/#{@user[:id]}" : '/admin/users'), method: 'post', autocomplete: 'off', :'data-loading-label' => 'Saving user…'}
     %input{type: 'hidden', name: 'csrf_token', value: @csrf_token}
     .mb-3
-      %label.form-label{for: 'username'} Username
+      %label.form-label{for: 'username'}
+        Username
+        %span.required-indicator{:'aria-hidden' => 'true'} *
+        %span.visually-hidden required
       %input#username.form-control{name: 'username', value: @user[:username], required: true, minlength: 3, maxlength: 64,
                                     pattern: '[A-Za-z0-9._-]{3,64}', autocomplete: 'off'}
     .mb-3
@@ -18,7 +21,11 @@
         %option{value: 'administrator', selected: @user[:role].to_s == 'administrator'} Administrator
         %option{value: 'viewer', selected: @user[:role].to_s == 'viewer'} Viewer
     .mb-3
-      %label.form-label{for: 'password'}= @user[:id] ? 'Reset password (optional)' : 'Initial password'
+      %label.form-label{for: 'password'}
+        = @user[:id] ? 'Reset password (optional)' : 'Initial password'
+        - unless @user[:id]
+          %span.required-indicator{:'aria-hidden' => 'true'} *
+          %span.visually-hidden required
       %input#password.form-control{name: 'password', type: 'password', minlength: 12,
                                    required: !@user[:id], autocomplete: 'new-password'}
     - if @user[:id]

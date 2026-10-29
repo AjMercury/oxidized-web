@@ -1,0 +1,114 @@
+.page-heading
+  .page-heading-copy
+    .breadcrumbs
+      %a{href: url_for('/nodes')} Overview
+      %i.bi.bi-chevron-right{:'aria-hidden' => 'true'}
+      %span Recent changes
+    %span.eyebrow.text-muted Configuration history
+    %h1 Recent changes
+    %p Recent saved Git revisions across the inventory, compared with each revision's immediate predecessor.
+  .page-heading-actions
+    %a.btn.btn-outline-secondary{href: url_for('/nodes')}
+      %i.bi.bi-arrow-left{:'aria-hidden' => 'true'}
+      Network overview
+
+.table-card.recent-changes-table-card
+  .table-toolbar
+    .table-search
+      %i.bi.bi-search{:'aria-hidden' => 'true'}
+      %label.visually-hidden{for: 'recentDeviceSearch'} Search recent changes
+      %input#recentDeviceSearch{type: 'search', placeholder: 'Search device or revision…'}
+    %label.visually-hidden{for: 'recentVendorFilter'} Filter by vendor
+    %select.form-select.form-select-sm#recentVendorFilter{style: 'max-width: 180px'}
+      %option{value: ''} All vendors
+      - @recent_changes.map { |change| change[:vendor] }.uniq.sort.each do |vendor|
+        %option{value: vendor}= vendor
+    %label.form-label.mb-0{for: 'recentFrom'} From
+    %input.form-control.form-control-sm.date-filter#recentFrom{type: 'date'}
+    %label.form-label.mb-0{for: 'recentTo'} To
+    %input.form-control.form-control-sm.date-filter#recentTo{type: 'date'}
+    %button.btn.btn-outline-secondary.btn-sm#recentReset{type: 'button'}
+      %i.bi.bi-eraser{:'aria-hidden' => 'true'}
+      Clear filters
+  - if @recent_changes_truncated
+    .alert.alert-info.recent-history-limit-note{role: 'status'}
+      Showing the #{Oxidized::API::WebApp::MAX_RECENT_CHANGES} most recent revisions. Open a device's configuration history to browse older revisions.
+  .table-responsive
+    %table.table.table-hover.align-middle#recentChangesTable
+      %thead
+        %tr
+          %th Changed at
+          %th Device
+          %th Vendor
+          %th Revision
+          %th.text-end Added
+          %th.text-end Removed
+          %th Actions
+      %tbody
+        - @recent_changes.each do |change|
+          - node = change[:node]
+          - changed_at = timestamp_time(change[:time])
+          - query = { node: node[:name], group: history_group_for(node), oid: change[:oid], epoch: changed_at&.to_i, num: change[:number] }
+          - history_query = Rack::Utils.build_query(node_full: node[:full_name] || node[:name])
+          - view_query = Rack::Utils.build_query(query)
+          %tr.recent-change-row{:'data-timestamp' => changed_at&.to_i || 0}
+            %td.time.text-nowrap{epoch: changed_at&.to_i, :'data-order' => changed_at&.to_i || 0}= changed_at || 'Unknown'
+            %td.device-cell
+              %a.device-name{href: url_for("/node/show/#{node[:full_name] || node[:name]}")}= node[:name]
+            %td= change[:vendor]
+            %td
+              %span.version-chip{title: change[:oid]} v#{change[:number]}
+              %code.revision-id= change[:oid].to_s[0, 10]
+            %td.text-end= change[:added].nil? ? '—' : change[:added]
+            %td.text-end= change[:removed].nil? ? '—' : change[:removed]
+            %td.actions-cell
+              - if change[:previous_oid]
+                - compare_query = Rack::Utils.build_query(query.merge(oid2: change[:previous_oid]))
+                %a.btn.btn-sm.btn-outline-primary{href: url_for("/node/version/diffs?#{compare_query}")}
+                  %i.bi.bi-file-earmark-diff{:'aria-hidden' => 'true'}
+                  Compare
+              - else
+                %span.text-muted No previous revision
+              %a.action-link{href: url_for("/node/version/view?#{view_query}"), title: 'View saved configuration', :'aria-label' => "View revision #{change[:number]} for #{node[:name]}"}
+                %i.bi.bi-file-earmark-code{:'aria-hidden' => 'true'}
+              %a.action-link{href: url_for("/node/version?#{history_query}"), title: 'View version history', :'aria-label' => "View history for #{node[:name]}"}
+                %i.bi.bi-clock-history{:'aria-hidden' => 'true'}
+        - if @recent_changes.empty?
+          %tr
+            %td.empty-state{colspan: 7} No saved configuration revisions are available.
+
+:javascript
+  $(function() {
+    var table = $('#recentChangesTable').DataTable({
+      autoWidth: false,
+      order: [[0, 'desc']],
+      lengthMenu: [20, 50, 100, { label: 'All', value: -1 }],
+      dom: 'lrtip',
+      searching: true,
+      stateSave: false
+    });
+    $('#recentDeviceSearch').on('input', function() { table.search(this.value).draw(); });
+    $('#recentVendorFilter').on('change', function() { table.column(2).search(this.value, false, false).draw(); });
+
+    $.fn.dataTable.ext.search.push(function(settings, data, dataIndex) {
+      var tableElement = settings.table || settings.nTable;
+      if (!tableElement || tableElement.id !== 'recentChangesTable') return true;
+      var rowData = settings.data ? settings.data[dataIndex] : settings.aoData && settings.aoData[dataIndex];
+      var row = rowData && (rowData.tr || rowData.nTr);
+      if (!row) return true;
+      var timestamp = Number(row.dataset.timestamp);
+      var from = document.getElementById('recentFrom').value;
+      var to = document.getElementById('recentTo').value;
+      var fromEpoch = from ? new Date(from + 'T00:00:00').getTime() / 1000 : null;
+      var toEpoch = to ? new Date(to + 'T23:59:59').getTime() / 1000 : null;
+      return (!fromEpoch || timestamp >= fromEpoch) && (!toEpoch || timestamp <= toEpoch);
+    });
+    $('#recentFrom, #recentTo').on('change', function() { table.draw(); });
+    $('#recentReset').on('click', function() {
+      $('#recentDeviceSearch').val('');
+      $('#recentVendorFilter, #recentFrom, #recentTo').val('');
+      table.search('');
+      table.columns().every(function() { this.search(''); });
+      table.draw();
+    });
+  });

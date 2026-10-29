@@ -17,6 +17,7 @@ module Oxidized
     class WebApp < Sinatra::Base
       VERSION_CACHE_LOCK = Mutex.new
       VERSION_CACHE = {} # rubocop:disable Style/MutableConstant
+      MAX_RECENT_CHANGES = 100
 
       helpers Sinatra::UrlForHelper
       set :public_folder, proc { File.join(root, 'public') }
@@ -237,6 +238,43 @@ module Oxidized
       #
       # as GroupName can include /, we use splat to match its value
       # and extract the optional ".json" with route_parse
+      get '/nodes/recent' do
+        truncated_history = false
+        changes = inventory_nodes.flat_map do |node|
+          revisions = backup_history_for(node)[:revisions]
+          truncated_history ||= revisions.length > MAX_RECENT_CHANGES
+          revisions.first(MAX_RECENT_CHANGES).each_with_index.filter_map do |revision, index|
+            oid = revision[:oid] || revision['oid']
+            next if oid.to_s.empty?
+
+            previous = revisions[index + 1]
+            previous_oid = previous && (previous[:oid] || previous['oid'])
+            revision_time = revision[:time] || revision['time']
+            { node: node, vendor: vendor_for_model(node[:model]), oid: oid,
+              previous_oid: previous_oid, time: revision_time, number: revisions.length - index,
+              added: nil, removed: nil }
+          end
+        end
+        changes.sort_by! { |change| timestamp_time(change[:time])&.to_f || 0 }
+        changes.reverse!
+        @recent_changes_truncated = truncated_history || changes.length > MAX_RECENT_CHANGES
+        @recent_changes = changes.first(MAX_RECENT_CHANGES)
+        @recent_changes.each do |change|
+          next unless change[:previous_oid]
+
+          begin
+            group = history_group_for(change[:node])
+            comparison = nodes.get_diff(change[:node][:name], group, change[:oid], change[:previous_oid])
+            counts = comparison[:stat] if comparison.is_a?(Hash)
+            change[:added] = counts[0] if counts
+            change[:removed] = counts[1] if counts
+          rescue StandardError => e
+            logger.warn("Unable to read recent revision diff for #{change[:node][:name]} (#{e.class})")
+          end
+        end
+        out :recent_changes
+      end
+
       get '/nodes/:filter/*' do
         value, @json = route_parse params[:splat].first
         @data = nodes.list.map { |node| filter_node_vars(node) }.select do |node|
@@ -247,6 +285,7 @@ module Oxidized
                         value.to_sym == :default
                       )
 
+          remember_history_group(node)
           node[:group] = 'default' unless node[:group]
           apply_backup_summary!(node)
           node
@@ -258,11 +297,13 @@ module Oxidized
         @management_error = inventory_management_unavailable_reason
         @data = nodes.list.map do |node|
           node = filter_node_vars(node)
+          remember_history_group(node)
           node[:group] = 'default' unless node[:group]
           apply_backup_summary!(node)
           node
         end
         @dashboard_activity = dashboard_revision_activity(@data)
+        @attempt_totals = backup_attempt_totals
         out :nodes
       end
 
@@ -292,6 +333,7 @@ module Oxidized
         nodes.each do |node|
           @data[node.name] = node.stats
         end
+        @health_nodes = inventory_nodes
         out :stats
       end
 
@@ -451,6 +493,35 @@ module Oxidized
         out :text
       end
 
+      # Render the current configuration with the browser's searchable code viewer.
+      # The existing /node/fetch endpoint remains the plain-text download contract.
+      get '/node/configuration' do
+        node_full = params[:node_full].to_s
+        if node_full.include?('/')
+          group, node = node_full.rpartition('/').values_at(0, 2)
+        else
+          group = nil
+          node = node_full
+        end
+        halt 400, 'node_full is required' if node.empty?
+
+        @config_node = node
+        @config_group = group
+        @config_node_full = node_full
+        @config_title = node
+        @config_source_label = 'Current configuration · Oxidized Core'
+        @config_description = group ? "Group: #{group}" : 'Current configuration from the configured Oxidized output.'
+        @config_timestamp = nil
+        @config_back_url = url_for("/node/show/#{node_full}")
+        @config_back_label = 'Device details'
+        @config_download_url = url_for("/node/fetch/#{node_full}")
+        @data = nodes.fetch(node, group)
+        @data = HTMLEntities.new.encode(convert_to_utf8(@data))
+        out :configuration
+      rescue NodeNotFound => e
+        halt 404, e.message
+      end
+
       # URL: /node/fetch/<group>/<node>[.json]
       # <group> is optional, and not used
       # .json is optional. If given, will return 'ok'
@@ -502,6 +573,7 @@ module Oxidized
           'failure' => 'Core reported a collection failure.'
         }[display_data[:last_attempt_status].to_s]
         @device_mtime = display_data[:last_changed_at] || 'Unknown'
+        @device_last_stored_at = display_data[:last_stored_revision_at] || 'Unknown'
         @device_revision_count = display_data[:revision_count]
         @management_error = inventory_management_unavailable_reason
         out :node
@@ -543,6 +615,14 @@ module Oxidized
         else
           utf8_encoded_content = convert_to_utf8(the_data)
           @data = HTMLEntities.new.encode(utf8_encoded_content)
+          history_node = @info[:group].empty? ? @info[:node] : "#{@info[:group]}/#{@info[:node]}"
+          @config_title = @info[:node]
+          @config_source_label = "Version #{@info[:num]} · saved snapshot"
+          @config_description = "Captured at #{@info[:time]}"
+          @config_timestamp = @info[:time]
+          @config_back_url = url_for("/node/version?#{Rack::Utils.build_query(node_full: history_node)}")
+          @config_back_label = 'Version history'
+          @config_download_url = "#{request.path}?#{request.query_string}&format=text"
         end
         out :version
       end
@@ -560,6 +640,15 @@ module Oxidized
         group = nil
         group = @info[:group] if @info[:group] != ''
         @oids_dates = nodes.version node, group
+        @diff_versions = @oids_dates.each_with_index.map do |version, index|
+          { oid: version[:oid], time: version[:time], number: @oids_dates.length - index }
+        end
+        @selected_diff_version = @diff_versions.find { |version| version[:oid].to_s == @info[:oid].to_s }
+        @previous_diff_version = if params[:oid2]
+                                   @diff_versions.find { |version| version[:oid].to_s == params[:oid2].to_s }
+                                 else
+                                   @diff_versions.find { |version| version[:number].to_i == @info[:num2].to_i }
+                                 end
         if params[:oid2]
           @info[:oid2] = params[:oid2]
           oid2 = nil
@@ -867,6 +956,7 @@ module Oxidized
       def inventory_nodes
         nodes.list.map do |serialized_node|
           node = filter_node_vars(serialized_node)
+          remember_history_group(node)
           node[:group] ||= 'default'
           apply_backup_summary!(node)
           node
@@ -899,10 +989,11 @@ module Oxidized
 
       def backup_history_for(node)
         @backup_history_cache ||= {}
-        key = [node[:group].to_s, node[:name].to_s]
+        group = history_group_for(node)
+        key = [group, node[:name].to_s]
         return @backup_history_cache[key] if @backup_history_cache.has_key?(key)
 
-        revisions = nodes.respond_to?(:version) ? nodes.version(node[:name], node[:group]) : nil
+        revisions = nodes.respond_to?(:version) ? nodes.version(node[:name], group) : nil
         revisions = [] unless revisions.is_a?(Array)
         latest = revisions.first
         latest_at = latest.is_a?(Hash) ? (latest[:time] || latest['time']) : nil
@@ -911,6 +1002,18 @@ module Oxidized
       rescue StandardError => e
         logger.warn("Unable to read backup history for #{node[:name]} (#{e.class})")
         @backup_history_cache[key] = { count: nil, latest_at: nil, latest_oid: nil, revisions: [] }
+      end
+
+      def remember_history_group(node)
+        @history_group_by_node ||= {}
+        identity = (node[:full_name] || node[:name]).to_s
+        @history_group_by_node[identity] = node[:group] unless @history_group_by_node.has_key?(identity)
+      end
+
+      def history_group_for(node)
+        @history_group_by_node ||= {}
+        identity = (node[:full_name] || node[:name]).to_s
+        @history_group_by_node.has_key?(identity) ? @history_group_by_node[identity] : node[:group]
       end
 
       def dashboard_revision_activity(device_nodes)
@@ -930,6 +1033,28 @@ module Oxidized
           logger.warn("Unable to read revision activity for #{node[:name]} (#{e.class})")
         end
         counts
+      end
+
+      def backup_attempt_totals
+        return { success: 0, failure: 0 } if @data.empty?
+        return nil unless nodes.respond_to?(:each)
+
+        totals = { success: 0, failure: 0 }
+        available = false
+        nodes.each do |node|
+          next unless node.respond_to?(:stats)
+
+          stats = node.stats
+          next unless stats.respond_to?(:successes) && stats.respond_to?(:failures)
+
+          available = true
+          totals[:success] += stats.successes.to_i
+          totals[:failure] += stats.failures.to_i
+        end
+        available ? totals : nil
+      rescue StandardError => e
+        logger.warn("Unable to read Core backup attempt totals (#{e.class})")
+        nil
       end
 
       def software_version_for(node)
@@ -1064,41 +1189,92 @@ module Oxidized
         end
       end
 
-      # method the give diffs in separate view (the old and the new) as in github
+      # Convert Git's unified patch into rows shared by split and unified views.
+      # Metadata and hunk headers stay out of configuration content, while source
+      # line numbers and exact whitespace are retained.
       def diff_view(diff)
-        old_diff = []
-        new_diff = []
-
         utf8_encoded_content = convert_to_utf8(diff)
-        HTMLEntities.new.encode(utf8_encoded_content).each_line do |line|
-          if /^\+/.match(line)
-            new_diff.push(line)
-          elsif /^-/.match(line)
-            old_diff.push(line)
-          else
-            new_diff.push(line)
-            old_diff.push(line)
+        return { rows: [], message: utf8_encoded_content } if utf8_encoded_content.start_with?('The text contains binary values')
+
+        rows = []
+        removed = []
+        added = []
+        old_number = nil
+        new_number = nil
+        in_hunk = false
+
+        flush_changes = lambda do
+          [removed.length, added.length].max.times do |index|
+            old_line = removed[index]
+            new_line = added[index]
+            kind = if old_line && new_line
+                     :modified
+                   else
+                     (old_line ? :removed : :added)
+                   end
+            rows << { kind: kind, old_number: old_line&.first, new_number: new_line&.first,
+                      old_text: old_line&.last, new_text: new_line&.last }
           end
+          removed.clear
+          added.clear
         end
 
-        length_o = old_diff.count
-        length_n = new_diff.count
-        (0..[length_o, length_n].max).each do |i|
-          break if i > [length_o, length_n].min
+        utf8_encoded_content.each_line do |line|
+          hunk = line.match(/\A@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/)
+          if hunk
+            flush_changes.call
+            old_number = hunk[1].to_i
+            new_number = hunk[2].to_i
+            in_hunk = true
+            next
+          end
+          next unless in_hunk
 
-          if /^-.*/.match(old_diff[i]) && !/^\+.*/.match(new_diff[i])
-            # tag removed latter to add color syntax
-            # ugly way to avoid asymmetry if at display the line takes 2 line on the screen
-            insert = "&nbsp;\n"
-            new_diff.insert(i, insert)
-            length_n += 1
-          elsif !/^-.*/.match(old_diff[i]) && /^\+.*/.match(new_diff[i])
-            insert = "&nbsp;\n"
-            old_diff.insert(i, insert)
-            length_o += 1
+          case line[0]
+          when ' '
+            flush_changes.call
+            content = line[1..].to_s.chomp
+            rows << { kind: :context, old_number: old_number, new_number: new_number,
+                      old_text: content, new_text: content }
+            old_number += 1
+            new_number += 1
+          when '-'
+            removed << [old_number, line[1..].to_s.chomp]
+            old_number += 1
+          when '+'
+            added << [new_number, line[1..].to_s.chomp]
+            new_number += 1
           end
         end
-        { old_diff: old_diff, new_diff: new_diff }
+        flush_changes.call
+
+        message = rows.empty? ? 'No configuration changes are available in this patch.' : nil
+        { rows: rows, message: message }
+      end
+
+      # Return equal prefix/suffix and changed ranges for a line replacement.
+      # Haml escapes every segment when rendering configuration content.
+      def diff_intraline(old_text, new_text)
+        old_chars = old_text.to_s.each_char.to_a
+        new_chars = new_text.to_s.each_char.to_a
+        prefix_length = 0
+        limit = [old_chars.length, new_chars.length].min
+        prefix_length += 1 while prefix_length < limit && old_chars[prefix_length] == new_chars[prefix_length]
+
+        suffix_length = 0
+        while suffix_length < (limit - prefix_length) &&
+              old_chars[old_chars.length - suffix_length - 1] == new_chars[new_chars.length - suffix_length - 1]
+          suffix_length += 1
+        end
+
+        old_middle_end = old_chars.length - suffix_length
+        new_middle_end = new_chars.length - suffix_length
+        {
+          old: [old_chars[0...prefix_length].join, old_chars[prefix_length...old_middle_end].join,
+                old_chars[old_middle_end..].to_a.join],
+          new: [new_chars[0...prefix_length].join, new_chars[prefix_length...new_middle_end].join,
+                new_chars[new_middle_end..].to_a.join]
+        }
       end
 
       def escape_once(text)
@@ -1107,6 +1283,8 @@ module Oxidized
       end
 
       def convert_to_utf8(text)
+        return '' if text.to_s.empty?
+
         detection = ::CharlockHolmes::EncodingDetector.detect(text)
         if detection[:type] == :text
           ::CharlockHolmes::Converter.convert text, detection[:encoding], 'UTF-8'

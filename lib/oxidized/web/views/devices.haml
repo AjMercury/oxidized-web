@@ -3,45 +3,44 @@
     %span.eyebrow.text-muted Administrator workspace
     %h1 Device management
     %p Add, update, remove, and back up devices from the configured Oxidized inventory.
+- required_inventory_fields = %w[name model ip].freeze
+- missing_inventory_fields = @inventory_mapping_error ? @inventory_error.to_s.split(':').last.to_s.split(',').map(&:strip) : required_inventory_fields.reject { |field| @device_fields.include?(field) }
+- missing_inventory_fields = [] if @inventory_error && !@inventory_mapping_error
+- mapping_incomplete = @inventory_mapping_error || (@inventory_error.nil? && missing_inventory_fields.any?)
 
 - if params[:notice]
   .alert.alert-success{role: 'status'} Device #{params[:notice]} successfully.
-- if @inventory_error
+- if @inventory_error || mapping_incomplete
   .alert.alert-warning.inventory-source-alert{role: 'status'}
-    %strong Device management is unavailable for this inventory
-    %p.mb-0= @inventory_error
-- elsif !%w[name model ip].all? { |field| @device_fields.include?(field) }
-  .alert.alert-warning{role: 'status'}
-    Device management is read-only until the existing CSV source maps hostname, model, and management address (`name`, `model`, and `ip`). No inventory data has been changed.
+    %strong Inventory mutations are disabled
+    - if @inventory_error
+      %p.mb-1= @inventory_error
+    - if mapping_incomplete
+      %p.mb-1 Missing required Oxidized fields: #{missing_inventory_fields.join(', ')}. Configure these mappings against the actual CSV header and column order.
+      %details
+        %summary Show the required CSV mapping keys
+        %pre.mt-2.mb-1
+          %code= "source:\n  csv:\n    map:\n      name: <zero-based column index>\n      model: <zero-based column index>\n      ip: <zero-based column index>"
+        %small Use the zero-based positions from your existing CSV. Do not copy placeholder values as literal settings.
+    %small Inventory data was not changed.
 
 .section-heading
   .section-heading-copy
     %h2= @current_admin == :viewer ? 'Inventory access' : 'Add device'
     %p= @current_admin == :viewer ? 'Your account has read-only access to the configured Oxidized inventory.' : 'Credentials are written only to the configured CSV source and are never returned by the management API.'
-- if @current_admin != :viewer && @inventory_error
-  .table-card.inventory-unavailable-card
-    .inventory-unavailable-icon
-      %i.bi.bi-database-exclamation{:'aria-hidden' => 'true'}
-    .inventory-unavailable-copy
-      - if @inventory_mapping_error
-        %h3 The configured CSV schema needs attention
-        %p Oxidized Web will only write to the active inventory after its field mapping is explicit. Check the actual column order in the existing inventory, then add matching positions to your Oxidized configuration.
-        %pre
-          %code= "source:\n  csv:\n    map:\n      name: <column index>\n      model: <column index>\n      ip: <column index>"
-        %small Example only: replace each placeholder with the zero-based index from your existing CSV. Do not copy these placeholders as literal values.
-      - else
-        %h3 The configured inventory is read-only in Web
-        %p= @inventory_error
-        %small No alternate inventory was created and no source data was changed.
-- elsif @current_admin != :viewer
+- if @current_admin != :viewer && @inventory_error.nil? && !mapping_incomplete
   .table-card.device-form-card
-    %form{action: url_for('/admin/devices'), method: 'post', autocomplete: 'off'}
+    %form{action: url_for('/admin/devices'), method: 'post', autocomplete: 'off', :'data-loading-label' => 'Adding device…'}
       %input{type: 'hidden', name: 'csrf_token', value: @csrf_token}
       .device-form-grid
         - [['name', 'Hostname', 'router-01.example.net'], ['ip', 'Management IP / FQDN', '192.0.2.10'], ['group', 'Device group', 'branch'], ['username', 'Username', 'oxidized']].each do |field, label, placeholder|
           - if @device_fields.include?(field)
             .mb-3
-              %label.form-label{for: "device-#{field}"}= label
+              %label.form-label{for: "device-#{field}"}
+                = label
+                - if %w[name ip].include?(field)
+                  %span.required-indicator{:'aria-hidden' => 'true'} *
+                  %span.visually-hidden required
               %input.form-control{id: "device-#{field}", name: field, type: 'text', placeholder: placeholder, required: %w[name ip].include?(field), autocomplete: 'off'}
         - if @device_fields.include?('model')
           .mb-3
@@ -54,7 +53,10 @@
               %i.bi.bi-hdd-network{:'aria-hidden' => 'true'}
               %span Select a vendor to preview its logo
           .mb-3
-            %label.form-label.mt-2{for: 'device-model'} Oxidized model
+            %label.form-label.mt-2{for: 'device-model'}
+              Oxidized model
+              %span.required-indicator{:'aria-hidden' => 'true'} *
+              %span.visually-hidden required
             %input.form-control#device-model{name: 'model', type: 'search', list: 'oxidized-model-list', placeholder: 'Search installed Core models…', required: true, autocomplete: 'off'}
             %datalist#oxidized-model-list
               - @models.each do |model|
@@ -80,6 +82,10 @@
       Export inventory
 .table-card
   .table-toolbar
+    .table-search
+      %i.bi.bi-search{:'aria-hidden' => 'true'}
+      %label.visually-hidden{for: 'managedSearch'} Search managed devices
+      %input#managedSearch{type: 'search', placeholder: 'Search name, address, model, or group…'}
     %label.visually-hidden{for: 'managedVendorFilter'} Filter devices by vendor
     %select.form-select.form-select-sm#managedVendorFilter{style: 'max-width: 170px'}
       %option{value: ''} All vendors
@@ -90,6 +96,19 @@
       %option{value: ''} All models
       - @data.map { |node| node[:model].to_s }.uniq.sort.each do |model|
         %option{value: model}= model
+    %label.visually-hidden{for: 'managedGroupFilter'} Filter devices by group
+    %select.form-select.form-select-sm#managedGroupFilter{style: 'max-width: 170px'}
+      %option{value: ''} All groups
+      - @data.map { |node| node[:group].to_s }.uniq.sort.each do |group|
+        %option{value: group}= group
+    %label.visually-hidden{for: 'managedStatusFilter'} Filter devices by backup status
+    %select.form-select.form-select-sm#managedStatusFilter{style: 'max-width: 180px'}
+      %option{value: ''} All backup statuses
+      - @data.map { |node| node[:backup_state].to_s.tr('_', ' ') }.uniq.sort.each do |state|
+        %option{value: state}= state
+    %button.btn.btn-outline-secondary.btn-sm#managedReset{type: 'button'}
+      %i.bi.bi-eraser{:'aria-hidden' => 'true'}
+      Clear filters
     - if @current_admin != :viewer
       %form#bulkDevices{action: url_for('/admin/devices/bulk'), method: 'post', onsubmit: "var op = document.getElementById('bulkOperation').value; return op === 'delete' ? confirm('Delete all selected devices from the configured inventory?') : (op === 'backup' ? confirm('Queue backups for all selected devices?') : true)"}
         %input{type: 'hidden', name: 'csrf_token', value: @csrf_token}
@@ -155,7 +174,7 @@
                     %i.bi.bi-trash{:'aria-hidden' => 'true'}
         - if @data.empty?
           %tr
-            %td.empty-state{colspan: 9} No devices are currently loaded from the configured inventory.
+            %td.empty-state{colspan: @current_admin == :viewer ? 8 : 9} No devices are currently loaded from the configured inventory.
 
 :javascript
   $(function() {
@@ -194,10 +213,22 @@
       autoWidth: false,
       order: [[firstInventoryColumn, 'asc']],
       columnDefs: [{ targets: disabledColumns, orderable: false, searchable: false }],
-      stateSave: true
+      stateSave: true,
+      dom: 'lrtip',
+      searching: true
     });
     $('#managedVendorFilter').on('change', function() { managed.column(firstInventoryColumn + 2).search(this.value, false, false).draw(); });
     $('#managedModelFilter').on('change', function() { managed.column(firstInventoryColumn + 3).search(this.value, false, false).draw(); });
+    $('#managedGroupFilter').on('change', function() { managed.column(firstInventoryColumn + 4).search(this.value, false, false).draw(); });
+    $('#managedStatusFilter').on('change', function() { managed.column(firstInventoryColumn + 5).search(this.value, false, false).draw(); });
+    $('#managedSearch').on('input', function() { managed.search(this.value).draw(); });
+    $('#managedReset').on('click', function() {
+      $('#managedSearch').val('');
+      $('#managedVendorFilter, #managedModelFilter, #managedGroupFilter, #managedStatusFilter').val('');
+      managed.search('');
+      managed.columns().every(function() { this.search(''); });
+      managed.draw();
+    });
     $('#selectAllDevices').on('change', function() {
       $('.device-selection').prop('checked', this.checked);
     });

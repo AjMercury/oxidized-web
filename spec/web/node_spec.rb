@@ -57,6 +57,36 @@ describe Oxidized::API::WebApp do
     end
   end
 
+  describe '/node/configuration' do
+    it 'renders the current configuration in the searchable viewer while preserving the raw endpoint' do
+      @nodes.expects(:fetch).with('sw42', 'my/group').returns("hostname sw42\ninterface vlan 10\n")
+
+      get '/node/configuration?node_full=my%2Fgroup%2Fsw42'
+
+      _(last_response.ok?).must_equal true
+      _(last_response.body).must_include('Configuration viewer')
+      _(last_response.body).must_include('id="configViewer"')
+      _(last_response.body).must_include('Complete configuration text')
+      _(last_response.body).must_include('hostname sw42')
+      _(last_response.body).must_include('interface vlan 10')
+      _(last_response.body).must_include('/node/fetch/my/group/sw42')
+    end
+
+    it 'requires a node identifier' do
+      get '/node/configuration'
+
+      _(last_response.status).must_equal 400
+    end
+
+    it 'returns not found for a missing node' do
+      @nodes.expects(:fetch).with('missing-node', nil).raises(Oxidized::NodeNotFound, 'node missing')
+
+      get '/node/configuration?node_full=missing-node'
+
+      _(last_response.status).must_equal 404
+    end
+  end
+
   describe '/node/next/' do
     it 'marks a node to be reloaded, then redirects to /nodes' do
       # Don't know why the method has been called Nodes#next...

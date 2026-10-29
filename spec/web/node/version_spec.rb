@@ -100,10 +100,7 @@ describe Oxidized::API::WebApp do
       )
       # The test needs to pass in any timezone, so we use Time.parse to get the
       # right string
-      _(last_response.body.include?(
-          "<span class=\"time\" epoch=\"1738781340\">" \
-          "#{Time.at(1738781340)}</span>"
-        )).must_equal true
+      _(last_response.body).must_match(/<span class="time" epoch="1738781340">/)
     end
 
     it 'does not display binary content' do
@@ -170,29 +167,38 @@ describe Oxidized::API::WebApp do
                 stat: [1, 2] }
 
       @nodes.expects(:version).with('sw5', nil).returns(@versions)
-      @nodes.expects(:get_diff).returns(@diff)
+      @nodes.expects(:get_diff).with('sw5', nil, 'C006', 'C001').returns(@diff)
 
       get '/node/version/diffs?node=sw5&group=&oid=C006&epoch=1738781340&num=3&oid2=C001'
       _(last_response.ok?).must_equal true
       body = last_response.body
-      _(body).must_include('aria-label="Previous configuration version"')
-      _(body).must_include('aria-label="Selected configuration version"')
-      _(body).must_include('changed line old')
-      _(body).must_include('changed line new1')
-      _(body).must_match(/<option(?=[^>]*\bselected(?:="selected")?(?:\s|>))(?=[^>]*value="C001")[^>]*>/)
-      previous_pane = body.split('<div class="diff-pane diff-pane-old">', 2).last
-                          .split('<div class="diff-pane diff-pane-new">', 2).first
-      selected_pane = body.split('<div class="diff-pane diff-pane-new">', 2).last.split('<div aria-label="Unified configuration comparison"', 2).first
-      _(previous_pane).must_include('changed line old')
-      _(previous_pane).wont_include('changed line new1')
-      _(selected_pane).must_include('changed line new1')
-      _(selected_pane).wont_include('changed line old')
-      # The test needs to pass in any timezone, so we use Time.parse to get the
-      # right string
-      _(last_response.body.include?(
-          "<span class=\"time\" epoch=\"1738781340\">" \
-          "#{Time.at(1738781340)}</span>"
-        )).must_equal true
+      _(body).must_include('aria-label="Previous configuration lines"')
+      _(body).must_include('aria-label="Selected configuration lines"')
+      _(body).must_include('diff-line-removed')
+      _(body).must_include('diff-line-added')
+      _(body).must_include('changed line <mark class="diff-intraline-change">old</mark>')
+      _(body).must_include('changed line <mark class="diff-intraline-change">new1</mark>')
+      _(body).wont_include('diff --git a/sw5 b/sw5')
+      _(body).wont_include('@@ -38,12 +38,12 @@')
+      current_selector = body.split('id="currentRevision"', 2).last.split('</select>', 2).first
+      previous_selector = body.split('id="previousRevision"', 2).last.split('</select>', 2).first
+      _(current_selector).must_match(/<option(?=[^>]*\bselected(?:="selected")?(?:\s|>))(?=[^>]*value="C006")[^>]*>/)
+      _(previous_selector).must_match(/<option(?=[^>]*\bselected(?:="selected")?(?:\s|>))(?=[^>]*value="C001")[^>]*>/)
+      _(body).must_match(%r{diff-stat-mark added[^>]*>\+</span>\s*<strong>1</strong>\s*<span>lines added}m)
+      _(body).must_match(%r{diff-stat-mark deleted[^>]*>−</span>\s*<strong>2</strong>\s*<span>lines removed}m)
+      previous_pane = body.split('id="oldDiffPane"', 2).last.split('id="newDiffPane"', 2).first
+      selected_pane = body.split('id="newDiffPane"', 2).last.split('id="unifiedDiff"', 2).first
+      _(previous_pane).must_include('diff-line-removed diff-line-change')
+      _(selected_pane).must_include('diff-line-added diff-line-change')
+      unified_pane = body.split('id="unifiedDiff"', 2).last
+      _(unified_pane).must_include('diff-line-removed diff-line-change')
+      _(unified_pane).must_include('diff-line-added diff-line-change')
+      _(previous_pane).must_include('changed line <mark class="diff-intraline-change">old</mark>')
+      _(previous_pane).wont_include('new1</mark>')
+      _(selected_pane).must_include('changed line <mark class="diff-intraline-change">new1</mark>')
+      _(selected_pane).must_include('new2')
+      _(selected_pane).wont_include('old</mark>')
+      _(last_response.body).must_match(/<span class="time" epoch="1738781340">/)
     end
 
     it 'returns 200 when group param is absent (no NoMethodError)' do
@@ -223,6 +229,22 @@ describe Oxidized::API::WebApp do
 
       get '/node/version/diffs?node=sw5&oid=C006&epoch=1738781340&num=2'
       _(last_response.ok?).must_equal true
+    end
+
+    it 'renders an explicit empty state for identical revisions' do
+      versions = [
+        { oid: 'C006', time: Time.parse('2025-02-05 19:49:00 +0100') },
+        { oid: 'C003', time: Time.parse('2025-02-05 19:03:00 +0100') }
+      ]
+      @nodes.expects(:version).with('sw5', nil).returns(versions)
+      @nodes.expects(:get_diff).with('sw5', nil, 'C006', 'C006').returns('no diffs')
+
+      get '/node/version/diffs?node=sw5&oid=C006&epoch=1738781340&num=3&oid2=C006'
+
+      _(last_response.ok?).must_equal true
+      _(last_response.body).must_include('No configuration changes are available in this patch.')
+      _(last_response.body).must_include('diff-empty-state')
+      _(last_response.body).must_include('>—</strong>')
     end
   end
 end

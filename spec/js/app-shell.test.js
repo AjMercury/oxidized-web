@@ -31,7 +31,7 @@ function createClassList() {
   };
 }
 
-function setup() {
+function setup(forms = []) {
   const documentListeners = {};
   const buttonListeners = {};
   const collapseListeners = {};
@@ -66,7 +66,7 @@ function setup() {
     addEventListener: (name, listener) => { documentListeners[name] = listener; },
     getElementById: (id) => ({ 'sidebar-toggle': toggle, 'sidebar-collapse-toggle': collapseToggle, 'app-sidebar': sidebar,
       'global-config-search': search }[id] || null),
-    querySelectorAll: () => [],
+    querySelectorAll: (selector) => selector === 'form[data-loading-label]' ? forms : [],
     querySelector: () => null
   };
   const windowListeners = {};
@@ -141,4 +141,27 @@ test('desktop sidebar collapse is keyboard-operable and saved as a preference', 
   assert.equal(ui.collapseAttributes['aria-pressed'], 'true');
   assert.equal(ui.collapseAttributes['aria-label'], 'Expand sidebar');
   assert.equal(ui.preferences['oxidized-sidebar-collapsed'], 'true');
+});
+
+test('admin form disables duplicate submits and announces its pending state', () => {
+  let submitListener;
+  const submitter = { disabled: false, textContent: 'Save changes' };
+  const attributes = {};
+  const form = {
+    dataset: { loadingLabel: 'Saving changes…' },
+    addEventListener: (name, listener) => { if (name === 'submit') submitListener = listener; },
+    querySelector: () => submitter,
+    setAttribute: (name, value) => { attributes[name] = value; }
+  };
+  setup([form]);
+
+  const firstEvent = { submitter, preventDefault() { this.prevented = true; } };
+  submitListener(firstEvent);
+  assert.equal(submitter.disabled, true);
+  assert.equal(submitter.textContent, 'Saving changes…');
+  assert.equal(attributes['aria-busy'], 'true');
+
+  const duplicateEvent = { submitter, preventDefault() { this.prevented = true; } };
+  submitListener(duplicateEvent);
+  assert.equal(duplicateEvent.prevented, true);
 });

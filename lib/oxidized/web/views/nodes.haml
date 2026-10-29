@@ -1,12 +1,22 @@
 - total_nodes = @data.length
 - successful_nodes = @data.count { |node| node[:last_attempt_status].to_s == 'success' }
-- failed_attempts = %w[no_connection no_auth auth_failure failure fail error timeout timelimit].freeze
-- failed_nodes = @data.count { |node| failed_attempts.include?(node[:last_attempt_status].to_s) }
-- unchecked_nodes = @data.count { |node| node[:backup_state] == 'not_checked_this_session' }
-- nodes_without_history = @data.count { |node| node[:revision_count] == 0 }
+- failed_statuses = %w[no_connection no_auth auth_failure failure fail error timeout timelimit].freeze
+- failed_nodes = @data.count { |node| failed_statuses.include?(node[:last_attempt_status].to_s) }
+- running_nodes = @data.count { |node| node[:backup_state].to_s == 'running' }
+- queued_nodes = @data.count { |node| node[:backup_state].to_s == 'queued' }
+- checked_nodes = successful_nodes + failed_nodes + running_nodes + queued_nodes
+- unchecked_nodes = [total_nodes - checked_nodes, 0].max
+- successful_attempts = @attempt_totals && @attempt_totals[:success]
+- failed_attempt_count = @attempt_totals && @attempt_totals[:failure]
+- completed_attempts = successful_attempts.to_i + failed_attempt_count.to_i
+- coverage_nodes = @data.count { |node| node[:revision_count].to_i.positive? }
+- unknown_history_nodes = @data.count { |node| node[:revision_count].nil? }
+- coverage_percent = total_nodes.zero? || unknown_history_nodes.positive? ? nil : (coverage_nodes.to_f / total_nodes * 100).round
+- checked_success_percent = successful_attempts.nil? || failed_attempt_count.nil? ? 'Unknown' : completed_attempts.zero? ? '—' : "#{(successful_attempts.to_f / completed_attempts * 100).round}%"
+- cisco_nodes = @data.count { |node| vendor_for_model(node[:model]) == 'Cisco' }
+- mikrotik_nodes = @data.count { |node| vendor_for_model(node[:model]) == 'MikroTik' }
+- other_vendor_nodes = [total_nodes - cisco_nodes - mikrotik_nodes, 0].max
 - recent_changes = @data.select { |node| node[:last_changed_at] }.sort_by { |node| node[:last_changed_at].to_i }.reverse.first(5)
-- vendor_counts = @data.group_by { |node| vendor_for_model(node[:model]) }.transform_values(&:count).sort_by { |vendor, count| [-count, vendor] }
-
 .page-heading
   .page-heading-copy
     %span.eyebrow.text-muted Network overview
@@ -49,28 +59,35 @@
         %i.bi.bi-hdd-stack{:'aria-hidden' => 'true'}
       %span.metric-caption Total devices
     %strong.metric-value{:'data-counter' => total_nodes}= total_nodes
-    %span.metric-note Devices in the current node list
+    %span.metric-note #{cisco_nodes} Cisco · #{mikrotik_nodes} MikroTik
   .metric-card.metric-card-success
     .metric-topline
       %span.metric-icon
         %i.bi.bi-check2-circle{:'aria-hidden' => 'true'}
-      %span.metric-caption Successful this session
-    %strong.metric-value{:'data-counter' => successful_nodes}= successful_nodes
-    %span.metric-note Most recent Core attempt succeeded
+      %span.metric-caption Successful attempts this session
+    %strong.metric-value{:'data-counter' => successful_attempts}= successful_attempts.nil? ? 'Unknown' : successful_attempts
+    %span.metric-note= successful_attempts.nil? ? 'Attempt history is unavailable from Core' : "#{checked_success_percent} of completed attempts this session"
   .metric-card.metric-card-danger
     .metric-topline
       %span.metric-icon
         %i.bi.bi-exclamation-circle{:'aria-hidden' => 'true'}
-      %span.metric-caption Failed this session
-    %strong.metric-value{:'data-counter' => failed_nodes}= failed_nodes
-    %span.metric-note Most recent Core attempt failed
+      %span.metric-caption Failed attempts this session
+    %strong.metric-value{:'data-counter' => failed_attempt_count}= failed_attempt_count.nil? ? 'Unknown' : failed_attempt_count
+    %span.metric-note= failed_attempt_count.nil? ? 'Attempt history is unavailable from Core' : 'Completed attempts this session'
   .metric-card.metric-card-muted
     .metric-topline
       %span.metric-icon
         %i.bi.bi-clock-history{:'aria-hidden' => 'true'}
-      %span.metric-caption Not checked this session
+    %span.metric-caption Not checked
     %strong.metric-value{:'data-counter' => unchecked_nodes}= unchecked_nodes
-    %span.metric-note #{nodes_without_history} devices have no stored revisions
+    %span.metric-note Includes devices without saved revisions
+  .metric-card.metric-card-neutral
+    .metric-topline
+      %span.metric-icon
+        %i.bi.bi-archive{:'aria-hidden' => 'true'}
+      %span.metric-caption Backup coverage
+    %strong.metric-value= coverage_percent.nil? ? 'Unknown' : "#{coverage_percent}%"
+    %span.metric-note #{coverage_nodes} devices with saved configurations#{unknown_history_nodes.positive? ? " · #{unknown_history_nodes} unknown" : ''}
 
 .dashboard-grid
   .chart-card.vendor-chart-card
@@ -80,17 +97,17 @@
       .chart-heading-copy
         %h2 Vendor distribution
         %p Actual device models in configured inventory
-    - vendor_colors = %w[var(--ow-color-accent) var(--ow-color-secondary) var(--ow-color-info) var(--ow-color-success) var(--ow-color-warning) var(--ow-color-danger) var(--ow-color-text-muted)]
+    - device_distribution = [['Cisco', cisco_nodes, 'var(--ow-color-accent)'], ['MikroTik', mikrotik_nodes, 'var(--ow-color-success)'], ['Other vendors', other_vendor_nodes, 'var(--ow-color-text-muted)']]
     - angle = 0.0
-    - segments = vendor_counts.each_with_index.map { |(_vendor, count), index| start_angle = angle; angle += total_nodes.zero? ? 0 : count.to_f / total_nodes * 360; "#{vendor_colors[index % vendor_colors.length]} #{start_angle.round(2)}deg #{angle.round(2)}deg" }
+    - segments = device_distribution.filter_map { |_vendor, count, color| next if count.zero?; start_angle = angle; angle += total_nodes.zero? ? 0 : count.to_f / total_nodes * 360; "#{color} #{start_angle.round(2)}deg #{angle.round(2)}deg" }
     .vendor-chart-layout
       .vendor-donut{style: "--vendor-donut: conic-gradient(#{segments.join(', ')});", :'aria-label' => "Vendor distribution across #{total_nodes} devices"}
         .vendor-donut-center
           %strong= total_nodes
           %span devices
       .vendor-chart-list
-        - vendor_counts.each do |vendor, count|
-          %button.vendor-chart-row{type: 'button', :'data-vendor-filter' => vendor, :'aria-label' => "Filter devices by #{vendor}, #{count} devices"}
+        - device_distribution.each do |vendor, count, color|
+          .vendor-chart-row
             %span.vendor-mark{class: "vendor-#{vendor_logo(vendor)}", :'aria-hidden' => 'true'}
               - if vendor_logo_asset(vendor)
                 %img.vendor-logo{src: url_for("/images/vendors/#{vendor_logo_asset(vendor)}.svg"), alt: '', loading: 'lazy'}
@@ -99,47 +116,50 @@
             %span.vendor-chart-label= vendor
             %span.vendor-chart-share #{total_nodes.zero? ? 0 : (count.to_f / total_nodes * 100).round}%
             %strong.vendor-chart-count= count
-    - if vendor_counts.empty?
+    - if total_nodes.zero?
       .empty-state No vendor data is available in the current inventory.
   .chart-card.health-chart-card
     .chart-card-heading
       %span.chart-icon.chart-icon-green
         %i.bi.bi-heart-pulse-fill{:'aria-hidden' => 'true'}
       .chart-heading-copy
-        %h2 Backup health
-        %p Runtime attempts reset when Core restarts
-    - unsuccessful_nodes = [total_nodes - successful_nodes - failed_nodes - unchecked_nodes - nodes_without_history, 0].max
+        %h2 Latest device state
+        %p State per device; Core resets it on restart
     - health_share = total_nodes.zero? ? 0 : (successful_nodes.to_f / total_nodes * 100).round
     - health_segments = []
     - health_angle = 0.0
-    - [[successful_nodes, 'var(--ow-color-success)'], [failed_nodes, 'var(--ow-color-danger)'], [unchecked_nodes, 'var(--ow-color-accent)'], [nodes_without_history, 'var(--ow-color-text-muted)'], [unsuccessful_nodes, 'var(--ow-color-warning)']].each do |count, color|
+    - [[successful_nodes, 'var(--ow-color-success)'], [failed_nodes, 'var(--ow-color-danger)'], [running_nodes, 'var(--ow-color-info)'], [queued_nodes, 'var(--ow-color-warning)'], [unchecked_nodes, 'var(--ow-color-text-muted)']].each do |count, color|
       - next if count.zero?
       - start_angle = health_angle
       - health_angle += total_nodes.zero? ? 0 : count.to_f / total_nodes * 360
       - health_segments << "#{color} #{start_angle.round(2)}deg #{health_angle.round(2)}deg"
     - health_background = health_segments.empty? ? '#E2E8F0' : "conic-gradient(#{health_segments.join(', ')})"
     .health-visual
-      .health-ring{style: "--health-gradient: #{health_background}", :'aria-label' => "#{successful_nodes} successful this session, #{failed_nodes} failed this session, #{unchecked_nodes} not checked this session, #{nodes_without_history} with no stored revisions"}
+      .health-ring{style: "--health-gradient: #{health_background}", :'aria-label' => "#{successful_nodes} devices with latest success, #{failed_nodes} with latest failure, #{running_nodes} running, #{queued_nodes} queued, #{unchecked_nodes} not checked this session"}
         .health-ring-inner
           %strong= total_nodes.zero? ? '—' : "#{health_share}%"
           %span checked OK
       .health-legend
         .health-legend-row
           %span.health-dot.health-dot-success
-          %span Success this session
+          %span Latest state: success
           %strong= successful_nodes
         .health-legend-row
           %span.health-dot.health-dot-danger
-          %span Failed this session
+          %span Latest state: failed
           %strong= failed_nodes
         .health-legend-row
           %span.health-dot.health-dot-muted
-          %span Not checked this session
-          %strong= unchecked_nodes
+          %span Running
+          %strong= running_nodes
+        .health-legend-row
+          %span.health-dot.health-dot-warning
+          %span Queued
+          %strong= queued_nodes
         .health-legend-row
           %span.health-dot.health-dot-muted
-          %span No saved revisions
-          %strong= nodes_without_history
+          %span Not checked
+          %strong= unchecked_nodes
 
 .section-heading
   .section-heading-copy
@@ -167,6 +187,11 @@
       %option{value: ''} All backup states
       - @data.map { |node| node[:backup_state].to_s.tr('_', ' ') }.uniq.sort.each do |status|
         %option{value: status}= status
+    %label.visually-hidden{for: 'groupFilter'} Filter by device group
+    %select.form-select.form-select-sm.inventory-filter#groupFilter{style: 'max-width: 170px'}
+      %option{value: ''} All groups
+      - @data.map { |node| node[:group].to_s }.uniq.sort.each do |group|
+        %option{value: group}= group
     %button.btn.btn-outline-secondary.btn-sm#resetSearch{type: 'button'}
       %i.bi.bi-eraser{:'aria-hidden' => 'true'}
       Clear search
@@ -290,15 +315,17 @@
     $('#vendorFilter').on('change', function() { table.column(2).search(this.value, false, false).draw(); });
     $('#modelFilter').on('change', function() { table.column(3).search(this.value, false, false).draw(); });
     $('#statusFilter').on('change', function() { table.column(7).search(this.value, false, false).draw(); });
+    $('#groupFilter').on('change', function() { table.column(6).search(this.value, false, false).draw(); });
     $('[data-vendor-filter]').on('click', function() {
       $('#vendorFilter').val(this.dataset.vendorFilter).trigger('change');
       document.getElementById('nodesTable').scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
     $('#resetSearch').on('click', function() {
       $('#inventorySearch').val('');
-      table.search('').draw();
-      table.columns().search('').draw();
       $('.inventory-filter').val('');
+      table.search('');
+      table.columns().every(function() { this.search(''); });
+      table.draw();
     });
   });
 

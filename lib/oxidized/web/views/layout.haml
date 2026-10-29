@@ -3,6 +3,7 @@
   !=haml :head
   %body
     - current_path = request.path_info
+    - topbar_title = if current_path.start_with?('/admin/users') then 'User management' elsif current_path.start_with?('/admin/devices') then 'Device management' elsif current_path.start_with?('/node/version/diffs') then 'Configuration diff' elsif current_path.start_with?('/node/version') then 'Configuration history' elsif current_path.start_with?('/node/configuration') then 'Configuration viewer' elsif current_path.start_with?('/node/show') then 'Device details' elsif current_path.start_with?('/nodes/stats') then 'Backup health' elsif current_path.start_with?('/nodes/recent') then 'Recent changes' elsif current_path.start_with?('/nodes/conf_search') then 'Configuration search' else 'Network overview' end
     .app-shell
       %aside.app-sidebar#app-sidebar{:'aria-label' => 'Primary navigation'}
         .sidebar-brand
@@ -20,7 +21,7 @@
                           :'aria-current' => current_path == '/nodes' || current_path.start_with?('/nodes/group/', '/nodes/model/') ? 'page' : nil}
               %i.bi.bi-hdd-network{:'aria-hidden' => 'true'}
               %span Overview
-            %a.sidebar-link{href: url_for('/nodes#recent-changes'), title: 'Recent configuration changes'}
+            %a.sidebar-link{href: url_for('/nodes/recent'), class: current_path == '/nodes/recent' ? 'active' : '', title: 'Recent configuration changes', :'aria-current' => current_path == '/nodes/recent' ? 'page' : nil}
               %i.bi.bi-clock-history{:'aria-hidden' => 'true'}
               %span Recent changes
         %details.sidebar-nav-group{open: true}
@@ -63,7 +64,7 @@
             %i.bi.bi-list{:'aria-hidden' => 'true'}
           .topbar-context
             %span.eyebrow Network operations
-            %span.topbar-title Configuration management
+            %span.topbar-title= topbar_title
           .topbar-actions
             %form.config-search{role: 'search', action: url_for('/nodes/conf_search'), method: 'post'}
               %input{type: 'hidden', name: 'csrf_token', value: @csrf_token}

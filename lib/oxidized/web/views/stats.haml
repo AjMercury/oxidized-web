@@ -1,129 +1,153 @@
+- health_nodes = @health_nodes || []
+- successful_nodes = health_nodes.count { |node| node[:last_attempt_status].to_s == 'success' }
+- failed_statuses = %w[no_connection no_auth auth_failure failure fail error timeout timelimit].freeze
+- failed_nodes = health_nodes.count { |node| failed_statuses.include?(node[:last_attempt_status].to_s) }
+- running_nodes = health_nodes.count { |node| node[:backup_state].to_s == 'running' }
+- queued_nodes = health_nodes.count { |node| node[:backup_state].to_s == 'queued' }
+- no_revision_nodes = health_nodes.count { |node| node[:revision_count] == 0 }
+
 .page-heading
   .page-heading-copy
     .breadcrumbs
-      %a{href: url_for('/nodes')} Devices
+      %a{href: url_for('/nodes')} Network overview
       %i.bi.bi-chevron-right{:'aria-hidden' => 'true'}
       %span Backup health
     %span.eyebrow.text-muted Operations
     %h1 Backup health
-    %p Run history and success/failure trends reported by Oxidized for each device.
+    %p Current Core attempts and stored configuration history. Attempt state resets when Core restarts.
   .page-heading-actions
     %button.btn.btn-outline-secondary{type: 'button', onclick: 'window.location.reload();'}
       %i.bi.bi-arrow-clockwise{:'aria-hidden' => 'true'}
       Refresh
+    - if @current_admin == :admin
+      != haml :backup_all, layout: false
+
+.overview-grid.health-overview-grid{:'aria-label' => 'Backup health summary'}
+  .metric-card.metric-card-neutral
+    .metric-topline
+      %span.metric-icon
+        %i.bi.bi-hdd-stack{:'aria-hidden' => 'true'}
+      %span.metric-caption Total devices
+    %strong.metric-value= health_nodes.length
+    %span.metric-note Loaded from the current Oxidized inventory
+  .metric-card.metric-card-success
+    .metric-topline
+      %span.metric-icon
+        %i.bi.bi-check2-circle{:'aria-hidden' => 'true'}
+      %span.metric-caption Successful
+    %strong.metric-value= successful_nodes
+    %span.metric-note Latest known attempt
+  .metric-card.metric-card-danger
+    .metric-topline
+      %span.metric-icon
+        %i.bi.bi-exclamation-circle{:'aria-hidden' => 'true'}
+      %span.metric-caption Failed
+    %strong.metric-value= failed_nodes
+    %span.metric-note Latest known attempt
+  .metric-card.metric-card-warning
+    .metric-topline
+      %span.metric-icon
+        %i.bi.bi-hourglass-split{:'aria-hidden' => 'true'}
+      %span.metric-caption Running / queued
+    %strong.metric-value= running_nodes + queued_nodes
+    %span.metric-note #{running_nodes} running · #{queued_nodes} queued
+  .metric-card.metric-card-muted
+    .metric-topline
+      %span.metric-icon
+        %i.bi.bi-archive{:'aria-hidden' => 'true'}
+      %span.metric-caption No saved configuration
+    %strong.metric-value= no_revision_nodes
+    %span.metric-note Devices with no known Git revisions
 
 .table-card.stats-card
   .table-toolbar
     .table-search
       %i.bi.bi-search{:'aria-hidden' => 'true'}
-      %label.visually-hidden{for: 'statsSearch'} Search backup history
-      %input#statsSearch{type: 'search', placeholder: 'Search devices…'}
+      %label.visually-hidden{for: 'statsSearch'} Search backup health
+      %input#statsSearch{type: 'search', placeholder: 'Search device, address, or model…'}
+    %label.visually-hidden{for: 'statsStatusFilter'} Filter backup status
+    %select.form-select.form-select-sm#statsStatusFilter{style: 'max-width: 200px'}
+      %option{value: ''} All statuses
+      - health_nodes.map { |node| node[:backup_state].to_s.tr('_', ' ') }.uniq.sort.each do |state|
+        %option{value: state}= state
+    %label.visually-hidden{for: 'statsVendorFilter'} Filter vendor
+    %select.form-select.form-select-sm#statsVendorFilter{style: 'max-width: 180px'}
+      %option{value: ''} All vendors
+      - health_nodes.map { |node| vendor_for_model(node[:model]) }.uniq.sort.each do |vendor|
+        %option{value: vendor}= vendor
+    %button.btn.btn-outline-danger.btn-sm#filterFailed{type: 'button'} Failed
+    %button.btn.btn-outline-secondary.btn-sm#filterNotChecked{type: 'button'} Not checked
     %button.btn.btn-outline-secondary.btn-sm#resetSearch{type: 'button'}
       %i.bi.bi-eraser{:'aria-hidden' => 'true'}
-      Clear search
+      Clear filters
   .table-responsive
     %table.table.table-hover.align-middle#statsTable
-
       %thead
         %tr
-          %th Name
-          %th Total Runs
-          %th Total Failures
-          %th Failure Rate
-          %th Average Run Time
-          %th Last Status
-          %th Last Update
-          %th Last Failure
-
+          %th Device
+          %th Management IP
+          %th Last attempt
+          %th Last success
+          %th Status
+          %th Failure reason
+          %th Actions
       %tbody
-        - @data.map do |node, stats|
-          - status = 'no_connection'
-          - successes = stats.successes
-          - failures = stats.failures
-          - avg_success_time = 0
-          - avg_failure_time = 0
-          - avg_time = 0
-          - row_class = ''
-
-          - if success = stats.get(:success)
-            - last_success = success.last[:end]
-            - avg_success_time = success.collect {|x| x[:time]}
-            - avg_success_time = avg_success_time.inject {|sum, x| sum + x}
-            - avg_success_time /= successes
-
-          - if no_connection = stats.get(:no_connection)
-            - last_failure = no_connection.last[:end]
-            - avg_failure_time = no_connection.collect {|x| x[:time]}
-            - avg_failure_time = avg_failure_time.inject {|sum, x| sum + x}
-            - avg_failure_time /= failures
-
-          - if avg_success_time > 0 && avg_failure_time > 0
-            - avg_time = (avg_success_time + avg_failure_time) / 2
-          - elsif avg_success_time > 0
-            - avg_time = avg_success_time
-          - elsif avg_failure_time > 0
-            - avg_time = avg_failure_time
-          - avg_time = "#{'%.2f' % avg_time}" unless avg_time == 'Unknown'
-
-          - if last_success && last_failure
-            - status = last_success > last_failure ? 'success' : 'no_connection'
-          - elsif last_success
-            - status = 'success'
-            - last_failure = 'never'
-          - else
-            - last_success = 'never'
-
-          - total_runs = successes + failures
-          - failure_rate = total_runs.zero? ? 0 : (failures / total_runs.to_f) * 100
-          - row_class = 'warning' if failure_rate >= 50
-          - row_class = 'danger' if failure_rate >= 75
-
-          %tr{class: row_class}
-            %td= node
-            %td= total_runs
-            %td= failures
-            %td #{'%.2f' % failure_rate}%
-            %td #{'%.2f' % avg_time}
+        - health_nodes.sort_by { |node| node[:name].to_s.downcase }.each do |node|
+          - stats = @data[node[:name]]
+          - successes = stats && stats.get(:success)
+          - last_success = successes && successes.last && successes.last[:end]
+          - status = node[:backup_state].to_s
+          - failure_reason = { 'no_connection' => 'Connection failed', 'no_auth' => 'Authentication failed', 'auth_failure' => 'Authentication failed', 'timelimit' => 'Collection timed out', 'fail' => 'Core reported failure', 'failure' => 'Core reported failure' }[node[:last_attempt_status].to_s]
+          %tr
+            %td.device-cell
+              %a.device-name{href: url_for("/node/show/#{node[:full_name]}")}= node[:name]
+              %span.device-subtitle= "#{vendor_for_model(node[:model])} · #{node[:model]}"
+            %td= node[:ip] || 'Unknown'
+            %td.time.text-nowrap{epoch: timestamp_time(node[:last_attempt_at])&.to_i}= timestamp_time(node[:last_attempt_at]) || 'Not checked this session'
+            %td.time.text-nowrap{epoch: timestamp_time(last_success)&.to_i}= timestamp_time(last_success) || 'Unknown'
             %td
-              %span{title: status.tr('_', ' '), class: status}= status.tr('_', ' ')
-            %td.time{ epoch: last_success.to_i }= last_success
-            %td.time{ epoch: last_failure.to_i }= last_failure
+              %span.status-pill{class: "status-#{status}"}= status.tr('_', ' ')
+            %td= failure_reason || (failed_statuses.include?(node[:last_attempt_status].to_s) ? 'See Oxidized logs for details' : '—')
+            %td.actions-cell
+              %a.btn.btn-sm.btn-outline-secondary{href: url_for("/node/show/#{node[:full_name]}")}
+                %i.bi.bi-eye{:'aria-hidden' => 'true'}
+                Details
+              - if @current_admin == :admin
+                %form.inline-action{action: url_for("/node/next/#{node[:full_name]}"), method: 'post'}
+                  %input{type: 'hidden', name: 'csrf_token', value: @csrf_token}
+                  %button.action-link{type: 'submit', :'aria-label' => "Retry backup for #{node[:name]}"}
+                    %i.bi.bi-arrow-repeat{:'aria-hidden' => 'true'}
+                    Retry backup
+        - if health_nodes.empty?
+          %tr
+            %td.empty-state{colspan: 7} No devices are available in the current inventory.
 
 :javascript
   $(function() {
     var table = $('#statsTable').DataTable({
-      columnDefs: [
-        {
-          /* Hide IP address by default */
-          target: 1,
-          visible: false,
-        },
-        {
-          /* do not permit to hide Name and Last Status */
-          targets: [0,5],
-          className: 'noVis'
-        },
-      ],
-      buttons:
-        [{
-          extend: 'colvis',
-          columns: ':not(.noVis)',
-          className: 'btn-primary',
-          text: '<i class="bi bi-layout-three-columns" aria-hidden="true"></i> Columns',
-        }],
       autoWidth: false,
+      order: [[0, 'asc']],
       lengthMenu: [20, 50, 250, 500, { label: 'All', value: -1 }],
-      stateSave: true,
+      dom: 'lrtip',
+      searching: true,
+      stateSave: true
     });
-
-    table.buttons(0,0).container().appendTo($('.stats-card .table-toolbar'));
-    table.buttons(0,0).nodes().removeClass('btn-secondary');
-
-    $('#statsSearch').on('input', function() {
-      table.search(this.value).draw();
+    $('#statsSearch').on('input', function() { table.search(this.value).draw(); });
+    $('#statsStatusFilter').on('change', function() { table.column(4).search(this.value, false, false).draw(); });
+    $('#statsVendorFilter').on('change', function() { table.column(0).search(this.value, false, false).draw(); });
+    $('#filterFailed').on('click', function() {
+      $('#statsStatusFilter').val('');
+      table.column(4).search('no connection|no auth|auth failure|failure|fail|timelimit|error|timeout', true, false).draw();
+    });
+    $('#filterNotChecked').on('click', function() {
+      $('#statsStatusFilter').val('');
+      table.column(4).search('not checked|never backed up', true, false).draw();
     });
     $('#resetSearch').on('click', function() {
-        $('#statsSearch').val('');
-        table.search('').draw();
+      $('#statsSearch').val('');
+      $('#statsStatusFilter, #statsVendorFilter').val('');
+      table.search('');
+      table.columns().every(function() { this.search(''); });
+      table.draw();
     });
   });

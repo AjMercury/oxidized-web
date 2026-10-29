@@ -10,7 +10,7 @@
 .table-card.profile-card
   %h2 Change password
   %p Choose a unique passphrase with at least 12 characters.
-  %form{action: url_for('/profile/password'), method: 'post', autocomplete: 'off'}
+  %form{action: url_for('/profile/password'), method: 'post', autocomplete: 'off', :'data-loading-label' => 'Changing password…'}
     %input{type: 'hidden', name: 'csrf_token', value: @csrf_token}
     .mb-3
       %label.form-label{for: 'current-password'} Current password

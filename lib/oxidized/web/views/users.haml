@@ -8,6 +8,12 @@
       %i.bi.bi-person-plus{:'aria-hidden' => 'true'}
       Create user
 .table-card
+  .table-toolbar
+    .table-search
+      %i.bi.bi-search{:'aria-hidden' => 'true'}
+      %label.visually-hidden{for: 'usersSearch'} Search user accounts
+      %input#usersSearch{type: 'search', placeholder: 'Search username, role, or status…'}
+    %span.toolbar-label #{@users.length} accounts
   .table-responsive
     %table.table.table-hover.align-middle#usersTable
       %thead
@@ -24,7 +30,7 @@
             %td= user[:role].to_s.capitalize
             %td
               %span.status-pill{class: user[:enabled] ? 'status-success' : 'status-failed'}= user[:enabled] ? 'Enabled' : 'Disabled'
-            %td= user[:last_login_at] ? user[:last_login_at].utc.strftime('%Y-%m-%d %H:%M UTC') : 'Never'
+            %td{:'data-order' => user[:last_login_at]&.to_i || 0}= user[:last_login_at] ? user[:last_login_at].utc.strftime('%Y-%m-%d %H:%M UTC') : 'Never'
             %td.actions-cell
               %a.btn.btn-sm.btn-outline-primary{href: url_for("/admin/users/#{user[:id]}/edit")} Edit / reset password
               - unless user[:id] == @current_user[:id]
@@ -32,3 +38,18 @@
                                     onsubmit: "return confirm('Delete this account and revoke its sessions?')"}
                   %input{type: 'hidden', name: 'csrf_token', value: @csrf_token}
                   %button.btn.btn-sm.btn-outline-danger{type: 'submit'} Delete
+        - if @users.empty?
+          %tr
+            %td.empty-state{colspan: 5} No local user accounts are configured.
+:javascript
+  $(function() {
+    var table = $('#usersTable').DataTable({
+      autoWidth: false,
+      order: [[0, 'asc']],
+      lengthMenu: [10, 25, 50, { label: 'All', value: -1 }],
+      dom: 'lrtip',
+      searching: true,
+      stateSave: true
+    });
+    $('#usersSearch').on('input', function() { table.search(this.value).draw(); });
+  });
