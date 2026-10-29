@@ -9,14 +9,14 @@
       Create user
 .table-card
   .table-responsive
-    %table.table.table-hover.align-middle
+    %table.table.table-hover.align-middle#usersTable
       %thead
         %tr
-          %th Username
-          %th Role
-          %th Status
-          %th Last login
-          %th Actions
+          %th{scope: 'col'} Username
+          %th{scope: 'col'} Role
+          %th{scope: 'col'} Status
+          %th{scope: 'col'} Last login
+          %th{scope: 'col'} Actions
       %tbody
         - @users.each do |user|
           %tr

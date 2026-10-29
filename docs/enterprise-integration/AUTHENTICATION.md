@@ -1,6 +1,6 @@
 # Oxidized Web Authentication
 
-Web 0.23.0 requires a local SQLite user database and a valid authenticated
+Web 0.24.0 requires a local SQLite user database and a valid authenticated
 session for every dashboard, configuration, history, inventory, and API route.
 Only the login page and local static assets are public. JSON/text API requests
 without a valid session receive `401`; browser pages redirect to `/login`.

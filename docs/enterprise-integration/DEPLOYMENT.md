@@ -86,21 +86,19 @@ After approval, install the exact reviewed gem artifacts and dependencies using
 the same RubyGems environment as `/usr/local/bin/oxidized`:
 
 ```sh
-sudo gem install --local ./oxidized-0.37.2.gem
-sudo gem install --local ./oxidized-web-0.23.0.gem
-sudo install -o oxidized -g oxidized -m 0700 -d /var/lib/oxidized
-sudo -u oxidized env OXIDIZED_WEB_AUTH_DB=/var/lib/oxidized/web-auth.sqlite3 \
-  /usr/local/bin/oxidized-web-user bootstrap-admin
+sudo gem install --local ./oxidized-web-0.24.0.gem
 sudo systemctl daemon-reload
 sudo systemctl restart oxidized.service
 ```
 
-The bootstrap command prompts for a username and password twice, requires at
-least 12 password characters, and creates no default credentials. Configure
-the same `OXIDIZED_WEB_AUTH_DB` path in the systemd environment before starting
-the service. If Core 0.37.2 is not approved or installed, the existing UI reads
-continue to use the installed Core; inventory management remains guarded by its
-history-preserving Core API check.
+Core is unchanged by this Web-only release; omit the Core install command when
+Core 0.37.2 is already installed. Keep the existing `OXIDIZED_WEB_AUTH_DB` path
+and SQLite file in place so current accounts, sessions, and audit history are
+preserved. Do not rerun `bootstrap-admin` during a routine upgrade. The
+bootstrap command is only for a new database and prompts for a username and
+password twice; it creates no default credentials. If the installed Core is
+older than 0.37.2, the existing UI remains available while inventory writes
+stay guarded by the history-preserving Core API check.
 
 ## Health and post-deployment verification
 
@@ -129,8 +127,8 @@ If the service fails health checks, restore the previously installed gem
 versions and saved files from the protected backup, then restart:
 
 ```sh
-sudo gem uninstall oxidized-web --version 0.23.0 --ignore-dependencies
-sudo gem install --local ./oxidized-web-0.22.0.gem
+sudo gem uninstall oxidized-web --version 0.24.0 --ignore-dependencies
+sudo gem install --local ./oxidized-web-0.23.0.gem
 sudo systemctl daemon-reload
 sudo systemctl restart oxidized.service
 sudo systemctl is-active oxidized.service
@@ -145,8 +143,8 @@ When the saved gems are available in the working directory, the exact package
 rollback is:
 
 ```sh
-sudo gem uninstall oxidized-web --version 0.23.0 --ignore-dependencies
-sudo gem install --local ./oxidized-web-0.22.0.gem
+sudo gem uninstall oxidized-web --version 0.24.0 --ignore-dependencies
+sudo gem install --local ./oxidized-web-0.23.0.gem
 sudo systemctl daemon-reload
 sudo systemctl restart oxidized.service
 sudo systemctl is-active oxidized.service
@@ -165,5 +163,5 @@ sudo systemctl restart oxidized.service
 
 The history-preserving reload does not delete historical configs. Keep the
 SQLite authentication database backed up; do not delete it when rolling back,
-because it contains the local users and audit history. Web 0.22.0 also uses
+because it contains the local users and audit history. Web 0.23.0 also uses
 session authentication and remains compatible with Core 0.37.2.

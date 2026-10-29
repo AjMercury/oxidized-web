@@ -53,21 +53,21 @@
     .metric-topline
       %span.metric-icon
         %i.bi.bi-check2-circle{:'aria-hidden' => 'true'}
-    %span.metric-caption Successful this session
+      %span.metric-caption Successful this session
     %strong.metric-value{:'data-counter' => successful_nodes}= successful_nodes
     %span.metric-note Most recent Core attempt succeeded
   .metric-card.metric-card-danger
     .metric-topline
       %span.metric-icon
         %i.bi.bi-exclamation-circle{:'aria-hidden' => 'true'}
-    %span.metric-caption Failed this session
+      %span.metric-caption Failed this session
     %strong.metric-value{:'data-counter' => failed_nodes}= failed_nodes
     %span.metric-note Most recent Core attempt failed
   .metric-card.metric-card-muted
     .metric-topline
       %span.metric-icon
         %i.bi.bi-clock-history{:'aria-hidden' => 'true'}
-    %span.metric-caption Not checked this session
+      %span.metric-caption Not checked this session
     %strong.metric-value{:'data-counter' => unchecked_nodes}= unchecked_nodes
     %span.metric-note #{nodes_without_history} devices have no stored revisions
 

@@ -3,6 +3,32 @@
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+
+## [0.24.0] - 2026-10-29
+
+### Added
+- Document the compact Oxidized Enterprise NOC design system, semantic color tokens, component density, accessibility rules, and responsive behavior.
+- Add a mobile card layout for User Management and compact Configuration History columns so controls remain readable without table panning.
+
+### Changed
+- Refine the Enterprise workspace with a 224px navy navigation rail, 56px top bar, restrained status-accent KPI cards, compact chart panels, crisp table headers, consistent controls, and clearer configuration diff panes.
+- Improve vendor legend wrapping, mobile filters and forms, dark-mode status and diff contrast, and reduced-motion handling.
+- Serve the custom stylesheet with the Web version in its URL so each release invalidates stale browser cache entries.
+- Keep data table type at readable 11px with 10px headers while reducing row and panel padding.
+
+### Fixed
+- Restore KPI label contrast after the legacy full-color card rules overrode the neutral card design; align all metric captions with their icons.
+- Prevent User Management columns and actions from clipping on 390px screens by reflowing each account as a compact card.
+- Hide secondary revision age on narrow screens so version, saved time, and download/compare actions fit in Configuration History.
+- Bound diff-pane height while allowing short comparisons to collapse to their actual content size.
+- Keep dark-mode vendor marks legible against dark surfaces.
+
+### Compatibility and verification
+- Compatible target: Oxidized Core 0.37.2 and Oxidized Web 0.24.0. Core is unchanged.
+- Windows Ruby 3.2.11: Web Minitest 120 runs / 584 assertions, 0 failures/errors, 4 platform skips; RuboCop 23 files clean; JavaScript 12/12.
+- Real Chrome captured 30 screenshots for Dashboard, Device Management, History, Diff, Login, and User Management across 1920x1080, 1440x900, 1366x768, 768x1024, and 390x844. Checked page-level horizontal overflow on authenticated pages: none observed.
+- Synthetic HTTPS browser checks verified login redirect, device create/edit/delete, diff unified/full-screen controls, dark mode, collapsed navigation, and responsive layout. Windows-only; Ubuntu 24.04/Linux verification and production deployment were not performed.
+
 ## [0.23.0] - 2026-10-29
 
 ### Added

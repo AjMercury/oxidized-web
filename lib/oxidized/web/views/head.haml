@@ -13,7 +13,7 @@
   %link{rel: 'stylesheet', href: url_for('/weblibs/dataTables.bootstrap5.css')}
   %link{rel: 'stylesheet', href: url_for('/weblibs/buttons.bootstrap5.css')}
   -# Custom Oxidized css
-  %link{rel: 'stylesheet', href: url_for('/css/oxidized.css')}
+  %link{rel: 'stylesheet', href: "#{url_for('/css/oxidized.css')}?v=#{Oxidized::API::WEB_VERSION}"}
   %meta{name: 'color-scheme', content: 'light dark'}
   %meta{name: 'csrf-token', content: @csrf_token}
 

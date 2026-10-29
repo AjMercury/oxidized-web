@@ -30,6 +30,7 @@ unchanged.
 
 | Core | Web | Verification | Result |
 |---|---|---|---|
+| 0.37.2 | 0.24.0 | Web Minitest 120 runs / 584 assertions (4 Windows skips); Node 12/12; RuboCop 23 files clean; actual Chrome screenshots for 6 pages across 5 viewports; synthetic login and device CRUD smoke checks | Core unchanged. Windows Ruby 3.2.11 only; Ubuntu/Linux checks remain required |
 | 0.37.0 | 0.18.1.1 | Existing Web test suite resolved against Core gem 0.37.0; mocked Core API tests and HTTP contract tests | Read/history/backup calls covered; new management feature requires the Core fork branch that adds `clean_obsolete:` |
 | 0.37.1 | 0.19.0 | Core focused `spec/nodes_spec.rb` (14/30); Web Minitest (91/385, 2 Windows skips); JavaScript (8/8); changed-file RuboCop | Core safe reload API and Web management routes verified; Web uses a synthetic Core-compatible node source |
 | 0.37.1 | 0.20.0 | JavaScript (9/9); Ruby/Haml, gem build, and Linux checks unavailable in current Windows runtime | Not fully certified; run the documented Ruby suite and gem build on Ubuntu 24.04 before merge |
