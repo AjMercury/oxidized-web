@@ -1,0 +1,112 @@
+.page-heading
+  .page-heading-copy
+    %span.eyebrow.text-muted Administrator workspace
+    %h1 Device management
+    %p Add, update, remove, and back up devices from the configured Oxidized inventory.
+
+- if params[:notice]
+  .alert.alert-success{role: 'status'} Device #{params[:notice]} successfully.
+- if @inventory_error
+  .alert.alert-warning{role: 'status'}= @inventory_error
+- elsif !%w[name model ip].all? { |field| @device_fields.include?(field) }
+  .alert.alert-warning{role: 'status'}
+    Device creation needs CSV mappings for hostname, model, and management address (`name`, `model`, and `ip`). Add those mappings to the existing Oxidized configuration before enabling writes.
+
+.section-heading
+  .section-heading-copy
+    %h2 Add device
+    %p Credentials are written only to the configured CSV source and are never returned by the management API.
+.table-card.device-form-card
+  %form{action: url_for('/admin/devices'), method: 'post', autocomplete: 'off'}
+    .device-form-grid
+      - [['name', 'Hostname', 'router-01.example.net'], ['ip', 'Management IP / FQDN', '192.0.2.10'], ['group', 'Device group', 'branch'], ['username', 'Username', 'oxidized']].each do |field, label, placeholder|
+        - if @device_fields.include?(field)
+          .mb-3
+            %label.form-label{for: "device-#{field}"}= label
+            %input.form-control{id: "device-#{field}", name: field, type: 'text', placeholder: placeholder, required: %w[name ip].include?(field), autocomplete: 'off'}
+      - if @device_fields.include?('model')
+        .mb-3
+          %label.form-label{for: 'device-model'} Vendor / model
+          %select.form-select#device-model{name: 'model', required: true}
+            %option{value: ''} Select an Oxidized model
+            - @models.each do |model|
+              %option{value: model}= model
+      - [['password', 'Password'], ['enable', 'Enable password'], ['ssh_port', 'SSH port'], ['telnet_port', 'Telnet port'], ['timeout', 'Connection timeout'], ['input', 'Connection protocol'], ['description', 'Description']].each do |field, label|
+        - if @device_fields.include?(field)
+          .mb-3
+            %label.form-label{for: "device-#{field}"}= label
+            %input.form-control{id: "device-#{field}", name: field, type: %w[password enable].include?(field) ? 'password' : 'text', autocomplete: %w[password enable].include?(field) ? 'new-password' : 'off'}
+    .device-form-actions
+      %button.btn.btn-primary{type: 'submit', disabled: !%w[name model ip].all? { |field| @device_fields.include?(field) }}
+        %i.bi.bi-plus-lg{:'aria-hidden' => 'true'}
+        Add device
+
+.section-heading
+  .section-heading-copy
+    %h2 Managed devices
+    %p Device state and backup results come from the live Oxidized node inventory.
+  .page-heading-actions
+    %a.btn.btn-outline-secondary{href: url_for('/admin/devices/export.csv')}
+      %i.bi.bi-download{:'aria-hidden' => 'true'}
+      Export inventory
+.table-card
+  %form#bulkDevices{action: url_for('/admin/devices/bulk'), method: 'post', onsubmit: "return confirm(document.getElementById('bulkOperation').value === 'delete' ? 'Delete all selected devices from the configured inventory?' : (document.getElementById('bulkOperation').value === 'backup' ? 'Queue backups for all selected devices?' : 'Assign the selected devices to this group?'))"}
+    .table-toolbar
+      %label.visually-hidden{for: 'bulkOperation'} Bulk operation
+      %select.form-select.form-select-sm#bulkOperation{name: 'operation', style: 'max-width: 190px'}
+        %option{value: 'backup'} Queue backups
+        - if @group_assignable
+          %option{value: 'group'} Assign group
+        %option{value: 'delete'} Delete selected
+      - if @group_assignable
+        %label.visually-hidden{for: 'bulkGroup'} New group
+        %input.form-control.form-control-sm#bulkGroup{name: 'group', type: 'text', placeholder: 'Group', style: 'max-width: 180px'}
+      %button.btn.btn-outline-primary.btn-sm{type: 'submit'} Apply to selected
+  .table-responsive
+    %table.table.table-hover.align-middle#managedDevices
+      %thead
+        %tr
+          %th
+            %input#selectAllDevices{type: 'checkbox', :'aria-label' => 'Select all devices'}
+          %th Device
+          %th Address
+          %th Model
+          %th Group
+          %th Status
+          %th Last backup
+          %th Actions
+      %tbody
+        - @data.sort_by { |node| node[:name].to_s.downcase }.each do |node|
+          %tr
+            %td
+              %input.device-selection{type: 'checkbox', name: 'devices[]', value: node[:name], form: 'bulkDevices', :'aria-label' => "Select #{node[:name]}"}
+            %td.device-cell
+              %a.device-name{href: url_for("/node/show/#{node[:name]}")}= node[:name]
+            %td.text-muted= node[:ip]
+            %td= node[:model]
+            %td= node[:group]
+            %td
+              %span{class: "#{node[:status]}"}= node[:status].to_s.tr('_', ' ')
+            %td.time.text-nowrap{epoch: node[:time] == 'never' ? '' : node[:time].to_i}= node[:time]
+            %td.actions-cell
+              %a.action-link{title: 'Edit device', :'aria-label' => "Edit #{node[:name]}", href: url_for("/admin/devices/#{node[:name]}/edit")}
+                %i.bi.bi-pencil-square{:'aria-hidden' => 'true'}
+              %form.inline-action{action: url_for("/node/next/#{node[:full_name]}"), method: 'post'}
+                %button.action-link{title: 'Run configuration backup', :'aria-label' => "Run backup for #{node[:name]}", type: 'submit'}
+                  %i.bi.bi-arrow-repeat{:'aria-hidden' => 'true'}
+              %form.inline-action{action: url_for("/admin/devices/#{node[:name]}/delete"), method: 'post', onsubmit: "return confirm('Delete this device from the configured inventory?')"}
+                %button.action-link.text-danger{title: 'Delete device', :'aria-label' => "Delete #{node[:name]}", type: 'submit'}
+                  %i.bi.bi-trash{:'aria-hidden' => 'true'}
+        - if @data.empty?
+          %tr
+            %td.empty-state{colspan: 8} No devices are currently loaded from the configured inventory.
+
+:javascript
+  $(function() {
+    $('#selectAllDevices').on('change', function() {
+      $('.device-selection').prop('checked', this.checked);
+    });
+    $('.device-selection').on('change', function() {
+      $('#selectAllDevices').prop('checked', $('.device-selection:not(:checked)').length === 0);
+    });
+  });

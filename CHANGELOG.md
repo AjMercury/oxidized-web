@@ -3,21 +3,36 @@
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
-## [Unreleased]
+## [0.19.0] - 2026-10-29
 
 ### Added
+- Authenticated device management for mapped plaintext CSV inventories, including atomic writes, locking, rollback, and a read-only mode for unsupported sources.
+- Bulk backup, bulk deletion, CSV inventory export, and bulk group assignment for selected devices, with per-device audit records.
+- Dynamic model discovery from the installed Core and natural numeric ordering for software version strings; unavailable versions display as Unknown.
+- Administrator authorization and same-origin checks for inventory writes, source reload, and manual backup actions.
+- Core compatibility matrix and Ubuntu 24.04 build, deployment, health-check, and rollback guidance.
 - Security regression tests for XSS prevention in node name, version, diff, stats views and HTMLEntities encoding of device config content (@mattimustang, @robertcheramy)
 
 ### Changed
+- Change source reload and manual backup browser actions to POST and require administrator authentication.
+- Redact credential-like node variables from inventory and detail responses by default.
+- Preserve configured CSV comments and unrelated fields during updates, and preserve Git configuration history during Web-triggered inventory reloads.
 - Remove the no longer needed escape_once helper call in node.haml, relying on HAML's global escape_html instead (@robertcheramy)
 - Update web libraries to the latest versions (@robertcheramy)
 - Encode JSON output with the standard library instead of Sinatra's json helper (@robertcheramy)
 - Set HAML's `attr_quote` explicitly to `"` for stable output across HAML versions (@robertcheramy)
 
 ### Fixed
+- Protect format-suffixed reload routes, enforce HTTPS origins for admin writes, and reject updates that clear required model or address fields.
+- Preserve CSV owner/group/mode during atomic replacement, and expose bulk group assignment only when Core's node group field is mapped.
+- Redact API, access, secret, and credential key variables from public inventory and device responses.
+- Reject duplicate rename and stale bulk selections; roll back inventory changes when Core fails to refresh the expected node set.
 - Fix `NoMethodError` when `group=` param is absent from `/node/version/view` and `/node/version/diffs` requests. `params[:group]` was assigned directly to `@info[:group]`; `params[:group]` is now normalized to '' so the HAML templates render the no-group branch instead of crashing with a 500 (@makaiver)
 - Fix `NoMethodError` and `RegexpError` crashes on `/node/version`, `/nodes/conf_search` and in `route_parse` when params are missing or contain a malformed regex; return empty results instead of a 500 (@makaiver)
 - Fix XSS vulnerability (CWE-79) by enabling HAML's escape_html globally; user-controlled values in node names, group names, model names, and URL parameters are now HTML-escaped in all templates (@mattimustang)
+
+
+## [Unreleased]
 
 
 ## [0.18.1 – 2026-01-19]

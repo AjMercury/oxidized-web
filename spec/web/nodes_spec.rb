@@ -19,6 +19,7 @@ describe Oxidized::API::WebApp do
        { name: 'sw9', ip: '10.10.10.9',  model: 'aos', time: 'time', mtime: 'mtime', group: 'gr/oup1' }]
     )
     app.set(:nodes, @nodes)
+    app.set(:configuration, { hide_node_vars: [] })
   end
 
   describe '/nodes.?:format?' do
@@ -28,6 +29,30 @@ describe Oxidized::API::WebApp do
       _(last_response.ok?).must_equal true
       result = JSON.parse(last_response.body)
       _(result.length).must_equal 6
+    end
+
+    it 'hides configured sensitive vars in inventory JSON without mutating Core data' do
+      node = {
+        name: 'sw4', vars: {
+          enable: 'secret-enable', password: 'secret-password', api_key: 'secret-api-key',
+          access_key: 'secret-access-key', location: 'lab'
+        }
+      }
+      @nodes.expects(:list).returns([node])
+      app.set(:configuration, { hide_node_vars: [] })
+
+      get '/nodes.json'
+
+      _(last_response.ok?).must_equal true
+      result = JSON.parse(last_response.body).first
+      _(result.dig('vars', 'enable')).must_equal '<hidden>'
+      _(result.dig('vars', 'password')).must_equal '<hidden>'
+      _(result.dig('vars', 'api_key')).must_equal '<hidden>'
+      _(result.dig('vars', 'access_key')).must_equal '<hidden>'
+      _(last_response.body).wont_include('secret-api-key')
+      _(last_response.body).wont_include('secret-access-key')
+      _(result.dig('vars', 'location')).must_equal 'lab'
+      _(node.dig(:vars, :enable)).must_equal 'secret-enable'
     end
 
     it 'shows only data-backed latest backup counts in the inventory overview' do
@@ -57,6 +82,24 @@ describe Oxidized::API::WebApp do
       _(body).must_match(/metric-card metric-card-muted.*?metric-value[^>]*>1</m)
       _(body).must_include('Devices whose most recent run succeeded')
       _(body).must_include('Devices whose most recent run failed')
+    end
+
+    it 'displays software versions only when Core supplied them and enables natural version sorting' do
+      @nodes.expects(:list).returns(
+        [
+          { name: 'routeros-old', full_name: 'routeros-old', ip: '192.0.2.1', model: 'routeros',
+            vars: { version: 'RouterOS 7.9' }, last: nil },
+          { name: 'routeros-new', full_name: 'routeros-new', ip: '192.0.2.2', model: 'routeros',
+            vars: {}, last: nil }
+        ]
+      )
+
+      get '/nodes'
+
+      _(last_response.ok?).must_equal true
+      _(last_response.body).must_include('RouterOS 7.9')
+      _(last_response.body).must_include('Unknown')
+      _(last_response.body).must_include('type: \'version-sort\'')
     end
 
     it 'lists the five devices with the newest modification timestamps' do
@@ -111,6 +154,18 @@ describe Oxidized::API::WebApp do
       _(last_response.ok?).must_equal true
       result = JSON.parse(last_response.body)
       _(result.length).must_equal 2
+    end
+
+    it 'hides configured sensitive vars in filtered inventory JSON' do
+      @nodes.expects(:list).returns(
+        [{ name: 'sw4', group: 'group1', vars: { password: 'secret' } }]
+      )
+      app.set(:configuration, { hide_node_vars: ['password'] })
+
+      get '/nodes/group/group1.json'
+
+      _(last_response.ok?).must_equal true
+      _(JSON.parse(last_response.body).first.dig('vars', 'password')).must_equal '<hidden>'
     end
     it 'shows all nodes of a group with /' do
       get '/nodes/group/gr/oup1.json'

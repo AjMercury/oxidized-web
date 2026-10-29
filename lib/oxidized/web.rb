@@ -57,6 +57,10 @@ module Oxidized
           hide_node_vars = []
         end
         hide_node_vars = hide_node_vars.map(&:to_sym)
+        admin_configuration = {
+          admin_username: ENV.fetch('OXIDIZED_WEB_ADMIN_USERNAME', nil),
+          admin_password: ENV.fetch('OXIDIZED_WEB_ADMIN_PASSWORD', nil)
+        }.compact
         {
           addr: configuration.listen? || DEFAULT_HOST,
           port: configuration.port? || DEFAULT_PORT,
@@ -64,7 +68,7 @@ module Oxidized
                                     DEFAULT_URI_PREFIX),
           vhosts: configuration.vhosts? || [],
           hide_node_vars: hide_node_vars
-        }
+        }.merge(admin_configuration)
       end
 
       # Legacy configuration style: "rest: 127.0.0.1:8888/prefix"
@@ -75,13 +79,17 @@ module Oxidized
           port = addr
           addr = nil
         end
+        admin_configuration = {
+          admin_username: ENV.fetch('OXIDIZED_WEB_ADMIN_USERNAME', nil),
+          admin_password: ENV.fetch('OXIDIZED_WEB_ADMIN_PASSWORD', nil)
+        }.compact
         {
           addr: addr,
           port: port.to_i,
           uri_prefix: normalize_uri(uri_prefix || DEFAULT_URI_PREFIX),
           vhosts: [],
           hide_node_vars: []
-        }
+        }.merge(admin_configuration)
       end
 
       def self.normalize_uri(uri_prefix)

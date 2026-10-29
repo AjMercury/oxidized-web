@@ -541,6 +541,39 @@ select:focus-visible {
   min-width: 105px;
   white-space: nowrap;
 }
+
+.inline-action {
+  display: inline-flex;
+  margin: 0;
+}
+
+.inline-action .action-link {
+  border: 0;
+  background: transparent;
+  font: inherit;
+}
+
+.device-form-card {
+  padding: 1.25rem;
+}
+
+.device-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 1.25rem;
+}
+
+.device-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: .75rem;
+}
+
+@media (max-width: 640px) {
+  .device-form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 .action-link {
   display: inline-flex;
   width: 30px;

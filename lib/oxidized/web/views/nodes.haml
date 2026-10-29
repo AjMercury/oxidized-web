@@ -70,6 +70,7 @@
           %th Device
           %th Address
           %th Platform / model
+          %th.version-sort Software version
           %th Group
           %th Latest backup
           %th Last backup time
@@ -84,6 +85,7 @@
             %td.text-muted= node[:ip]
             %td
               %a.model-link{href: url_for("/nodes/model/#{node[:model]}")}= node[:model]
+            %td{:'data-order' => node.dig(:vars, 'version') || node[:version] || 'Unknown'}= node.dig(:vars, 'version') || node[:version] || 'Unknown'
             %td
               %a.group-link{href: url_for("/nodes/group/#{node[:group]}")}= node[:group]
             %td
@@ -95,15 +97,17 @@
                 %i.bi.bi-cloud-download{:'aria-hidden' => 'true'}
               %a.action-link{title: 'View configuration history', :'aria-label' => "View configuration history for #{node[:name]}", href: url_for("/node/version?node_full=#{node[:full_name]}")}
                 %i.bi.bi-clock-history{:'aria-hidden' => 'true'}
-              %a.action-link{title: 'Run configuration backup', :'aria-label' => "Run configuration backup for #{node[:name]}", href: url_for("/node/next/#{node[:full_name]}")}
-                %i.bi.bi-arrow-repeat{:'aria-hidden' => 'true'}
+              %form.inline-action{action: url_for("/node/next/#{node[:full_name]}"), method: 'post'}
+                %button.action-link{title: 'Run configuration backup', :'aria-label' => "Run configuration backup for #{node[:name]}", type: 'submit'}
+                  %i.bi.bi-arrow-repeat{:'aria-hidden' => 'true'}
 
 :javascript
   $(function() {
     var table = $('#nodesTable').DataTable({
       columnDefs: [
         { target: 1, visible: false },
-        { targets: [0, 7], className: 'noVis' },
+        { targets: 3, type: 'version-sort' },
+        { targets: [0, 8], className: 'noVis' },
       ],
       buttons: [{
         extend: 'colvis',

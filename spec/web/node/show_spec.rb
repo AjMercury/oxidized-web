@@ -22,7 +22,7 @@ describe Oxidized::API::WebApp do
       "\n  &quot;vars&quot;: {" \
       "\n    &quot;oxi&quot;: &quot;dized&quot;," \
       "\n    &quot;enable&quot;: &quot;#{enable_val}&quot;," \
-      "\n    &quot;username&quot;: &quot;oxidized&quot;," \
+      "\n    &quot;username&quot;: &quot;&lt;hidden&gt;&quot;," \
       "\n    &quot;password&quot;: &quot;#{password_val}&quot;" \
       "\n  },\n  &quot;mtime&quot;: &quot;2025-02-05 19:49:11 +0100&quot;" \
       "\n}</code>"
@@ -58,16 +58,16 @@ describe Oxidized::API::WebApp do
 
   describe "get /node/show/:node" do
     describe "Oxidized <= 0.34.1" do
-      it "shows the metadata of a node" do
+      it "hides credential-like vars even when optional hiding is not configured" do
         app.set(:configuration, { hide_node_vars: [] })
 
         get '/node/show/sw5'
         _(last_response.ok?).must_equal true
         body = last_response.body
 
-        _(body).must_match(/secret_enable/)
-        _(body).must_match(/secret_password/)
-        _(body.include?(expected_json_body(hide_vars: false))).must_equal true
+        _(body).wont_match(/secret_enable/)
+        _(body).wont_match(/secret_password/)
+        _(body.include?(expected_json_body(hide_vars: true))).must_equal true
       end
 
       it "hides vars in hide_node_vars" do
@@ -97,16 +97,16 @@ describe Oxidized::API::WebApp do
         }
       end
 
-      it "shows the metadata of a node" do
+      it "hides credential-like vars even when optional hiding is not configured" do
         app.set(:configuration, { hide_node_vars: [] })
 
         get '/node/show/sw5'
         _(last_response.ok?).must_equal true
         body = last_response.body
 
-        _(body).must_match(/secret_enable/)
-        _(body).must_match(/secret_password/)
-        _(body.include?(expected_json_body(hide_vars: false))).must_equal true
+        _(body).wont_match(/secret_enable/)
+        _(body).wont_match(/secret_password/)
+        _(body.include?(expected_json_body(hide_vars: true))).must_equal true
       end
 
       it "hides vars in hide_node_vars" do
@@ -129,7 +129,7 @@ describe Oxidized::API::WebApp do
     describe "HTML escaping" do
       it "escapes HTML special characters in var values" do
         app.set(:configuration, { hide_node_vars: [] })
-        @serialized_node[:vars][:enable] = "<script>alert(1)</script>"
+        @serialized_node[:vars][:location] = "<script>alert(1)</script>"
 
         get '/node/show/sw5'
         _(last_response.ok?).must_equal true

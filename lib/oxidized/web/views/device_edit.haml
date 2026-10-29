@@ -1,0 +1,32 @@
+.page-heading
+  .page-heading-copy
+    .breadcrumbs
+      %a{href: url_for('/admin/devices')} Device management
+      %i.bi.bi-chevron-right{:'aria-hidden' => 'true'}
+      %span= @device[:name]
+    %span.eyebrow.text-muted Administrator workspace
+    %h1 Edit device
+    %p Update mapped inventory fields for #{@device[:name]}.
+.table-card.device-form-card
+  %form{action: url_for("/admin/devices/#{@device[:name]}"), method: 'post', autocomplete: 'off'}
+    .device-form-grid
+      - [['new_name', 'name', 'Hostname'], ['ip', 'ip', 'Management IP / FQDN'], ['group', 'group', 'Device group'], ['username', 'username', 'Username']].each do |input_name, field, label|
+        - if @device_fields.include?(field)
+          .mb-3
+            %label.form-label{for: "device-#{field}"}= label
+            %input.form-control{id: "device-#{field}", name: input_name, type: 'text', value: field == 'name' ? @device[:name] : @device[field.to_sym], required: %w[name ip].include?(field), autocomplete: 'off'}
+      - if @device_fields.include?('model')
+        .mb-3
+          %label.form-label{for: 'device-model'} Vendor / model
+          %select.form-select#device-model{name: 'model', required: true}
+            - @models.each do |model|
+              %option{value: model, selected: @device[:model].to_s == model}= model
+      - [['password', 'Password'], ['enable', 'Enable password'], ['ssh_port', 'SSH port'], ['telnet_port', 'Telnet port'], ['timeout', 'Connection timeout'], ['input', 'Connection protocol'], ['description', 'Description']].each do |field, label|
+        - if @device_fields.include?(field)
+          .mb-3
+            %label.form-label{for: "device-#{field}"}= label
+            %input.form-control{id: "device-#{field}", name: field, type: %w[password enable].include?(field) ? 'password' : 'text', value: %w[password enable].include?(field) ? '' : @device.dig(:vars, field), autocomplete: %w[password enable].include?(field) ? 'new-password' : 'off'}
+    %p.form-text Leave username and password fields blank to keep the stored credentials.
+    .device-form-actions
+      %a.btn.btn-outline-secondary{href: url_for('/admin/devices')} Cancel
+      %button.btn.btn-primary{type: 'submit'} Save changes

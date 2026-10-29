@@ -14,9 +14,10 @@
     %a.btn.btn-outline-secondary{href: url_for("/node/version?node_full=#{@data[:full_name]}")}
       %i.bi.bi-clock-history{:'aria-hidden' => 'true'}
       History
-    %a.btn.btn-primary{href: url_for("/node/next/#{@data[:full_name]}")}
-      %i.bi.bi-arrow-repeat{:'aria-hidden' => 'true'}
-      Run backup
+    %form{action: url_for("/node/next/#{@data[:full_name]}"), method: 'post'}
+      %button.btn.btn-primary{type: 'submit'}
+        %i.bi.bi-arrow-repeat{:'aria-hidden' => 'true'}
+        Run backup
 .config-panel
   .config-panel-header
     .config-panel-label

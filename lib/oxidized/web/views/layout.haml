@@ -23,6 +23,9 @@
                           :'aria-current' => current_path == '/nodes/stats' ? 'page' : nil}
             %i.bi.bi-activity{:'aria-hidden' => 'true'}
             %span Backup health
+          %a.sidebar-link{href: url_for('/admin/devices')}
+            %i.bi.bi-sliders{:'aria-hidden' => 'true'}
+            %span Device management
           %a.sidebar-link{href: '#global-config-search'}
             %i.bi.bi-search{:'aria-hidden' => 'true'}
             %span Configuration search

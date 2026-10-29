@@ -88,3 +88,38 @@ extensions:
      - enable
      - password
 ```
+
+## Administrator operations
+
+Inventory writes, source reload, and manual backup use HTTP Basic
+authentication. Configure both environment variables in the Oxidized systemd
+service before enabling these operations:
+
+```ini
+Environment=OXIDIZED_WEB_ADMIN_USERNAME=oxidized-admin
+EnvironmentFile=/etc/oxidized/web-admin.env
+```
+
+Store `OXIDIZED_WEB_ADMIN_PASSWORD` in a root-owned environment file with mode
+`0600`; systemd reads it before starting the `oxidized` service account. Do not
+put passwords in the Oxidized YAML file or in command-line arguments. Without both values, protected
+operations return `503 Service Unavailable`.
+
+Use HTTPS at the reverse proxy and preserve the browser's `Host` header. The
+Web application checks the authenticated user and requires an `Origin` or
+`Referer` matching that host for every state-changing request. It does not
+accept proxy identity headers. Configure `vhosts` with the public hostname to
+restrict accepted hosts.
+
+The protected reload and manual-backup actions use `POST`; the former `GET`
+forms of `/reload` and `/node/next/...` no longer perform state changes. The
+existing `PUT /node/next/...` JSON API remains available to authenticated
+administrators and now requires the same-origin check.
+
+Device management currently supports only a plaintext CSV source with mapped
+`name`, `model`, and `ip` fields. It refuses SQL, HTTP, NetBox, GPG-encrypted
+CSV, unsupported delimiter/mapping layouts, and Core versions without the
+history-preserving reload option. `description`, `enable`, `ssh_port`, and
+`telnet_port` are shown only when mapped; ports use Core's `ssh_port` and
+`telnet_port` node variables. Blank credential fields on edit keep the
+existing stored values.
