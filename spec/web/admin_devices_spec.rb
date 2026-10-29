@@ -283,6 +283,16 @@ describe 'administrator device management' do
     _(@nodes.reload_history_options.last).must_equal false
   end
 
+  it 'delegates a legacy bulk backup to the shared Core queue when available' do
+    File.binwrite(@path, "one:ios:192.0.2.1:::::\ntwo:routeros:192.0.2.2:::::\n")
+    @nodes.load(nil, clean_obsolete: false)
+    @nodes.expects(:queue_backups).with(%w[one two]).returns([])
+
+    post '/admin/devices/bulk.json', { operation: 'backup', 'devices[]' => %w[one two] }, admin_headers
+    _(last_response.ok?).must_equal true
+    _(@nodes.backup_requests).must_be_empty
+  end
+
   it 'rejects bulk requests with unknown devices before any backup or deletion' do
     original = "one:ios:192.0.2.1:::::\n"
     File.binwrite(@path, original)

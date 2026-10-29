@@ -11,7 +11,8 @@ interfaces:
 | `show` | Device details | Web deep-copies the serialized node and applies the same redaction. |
 | `fetch` | Current config and search | Core owns output-backend behavior and errors. |
 | `version`, `get_version`, `get_diff` | History and diff views | History remains in Core's output repository. |
-| `next` | Manual backup enqueue | Returns when enqueued; collection and connection status remain asynchronous in Core. |
+| `queue_backups`, `backup_status` | Global, per-device and selected manual backups | Fork Core 0.37.3 supplies atomic enqueue/deduplication and execution state through retry and output completion; requests use the configured worker budget. |
+| `next` | Legacy backup API compatibility | Older Core callers remain asynchronous; the tracked UI requires the new queue/status capability. |
 | `load` | Source reload and post-write inventory refresh | Enterprise integration requires `load(nil, clean_obsolete: false)` to keep deleted-device Git history. |
 
 Core's CSV source reads the configured file, applies `source.csv.map` and
@@ -30,6 +31,7 @@ unchanged.
 
 | Core | Web | Verification | Result |
 |---|---|---|---|
+| 0.37.3 | 0.25.0 | Web 133 tests / 636 assertions, four Windows skips; JS 15; Core queue 7 / 32 and RouterOS 6 / 45; real Chrome queue/restart/Git and light/dark responsive screenshots | Companion releases required. Full Core Windows suite has the known 17 path/signal failures and nine errors; Ubuntu CI must verify POSIX behavior. |
 | 0.37.2 | 0.24.0 | Web Minitest 120 runs / 584 assertions (4 Windows skips); Node 12/12; RuboCop 23 files clean; actual Chrome screenshots for 6 pages across 5 viewports; synthetic login and device CRUD smoke checks | Core unchanged. Windows Ruby 3.2.11 only; Ubuntu/Linux checks remain required |
 | 0.37.0 | 0.18.1.1 | Existing Web test suite resolved against Core gem 0.37.0; mocked Core API tests and HTTP contract tests | Read/history/backup calls covered; new management feature requires the Core fork branch that adds `clean_obsolete:` |
 | 0.37.1 | 0.19.0 | Core focused `spec/nodes_spec.rb` (14/30); Web Minitest (91/385, 2 Windows skips); JavaScript (8/8); changed-file RuboCop | Core safe reload API and Web management routes verified; Web uses a synthetic Core-compatible node source |

@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.25.0] - 2026-10-29
+
+### Added
+- Add administrator-only Backup All Now actions to Dashboard and Device Management, with the complete Core inventory count in the confirmation.
+- Add labeled Backup Now actions to Inventory, Management, and Device Details, plus selected-device backups across pagination.
+- Display real Core queued, running, succeeded, failed, and completed state, execution timestamps, and failure reasons. Suppress duplicate active requests and distinguish unavailable tracking after restart.
+
+### Changed
+- Require the companion fork's Core 0.37.3 manual queue API for tracked backups; enqueueing never implies successful collection or a new revision.
+- Apply the Midnight Violet palette through shared light/dark tokens, neutral KPI surfaces, semantic status icons, navigation, pagination, controls, login, charts, and diffs.
+- Give Dashboard refresh, CSV inventory reload, and configuration collection distinct labels and icons.
+
+### Compatibility
+- Deploy Core 0.37.3 and Web 0.25.0 together. Core owns scheduling, retry completion, configuration comparison, Git storage, and concurrency limits.
+- See docs/ubuntu-24.04-upgrade.md for paired installation and rollback. Production data and historical Git revisions are not migrated.
+
+### Verification
+- Web Ruby: 133 tests / 636 assertions passed, four Windows platform skips; JavaScript: 15 passed; Web Ruby lint: 25 files clean.
+- Core manual queue: seven tests / 32 assertions passed; RouterOS production Git tests: six tests / 45 assertions passed. Full Core on Windows retains 17 known path/signal failures and nine errors; Ubuntu CI remains required.
+- Real Chrome exercised single/all 23/selected backups, duplicates, failures, Viewer denial, mobile, unchanged and changed Git revisions, and actual restart. The theme matrix captures seven pages in both themes at six viewport sizes and checks overflow and representative control contrast.
+
 ## [0.24.1] - 2026-10-29
 
 ### Fixed

@@ -79,6 +79,27 @@ module Oxidized
         'Authentication service is unavailable. Check the Oxidized Web authentication database.'
       end
 
+      get '/admin/backups.json' do
+        require_administrator!
+        content_type :json
+        halt 409, JSON.generate(error: 'Manual backup tracking requires the Core manual queue API (Core 0.37.3 in this fork).') unless nodes.respond_to?(:backup_status)
+        JSON.generate(devices: nodes.backup_status)
+      end
+
+      post '/admin/backups.json' do
+        require_administrator!
+        content_type :json
+        halt 409, JSON.generate(error: 'Manual backups require the Core manual queue API (Core 0.37.3 in this fork).') unless nodes.respond_to?(:queue_backups)
+        names = params['all'] == 'true' ? nil : Array(params['devices']).map(&:to_s).reject(&:empty?).uniq
+        halt 422, JSON.generate(error: 'Select at least one device.') if names == []
+        result = nodes.queue_backups(names)
+        audit_admin!('backup_requested', names ? names.join(', ') : 'all devices')
+        status 202
+        JSON.generate(devices: result)
+      rescue NodeNotFound
+        halt 404, JSON.generate(error: 'A selected device is no longer configured.')
+      end
+
       get '/' do
         redirect url_for('/nodes')
       end
@@ -320,10 +341,12 @@ module Oxidized
           unknown = names - known_names
           raise DeviceInventory::Error.new('One or more selected devices are no longer in the inventory.', status: 409) unless unknown.empty?
 
-          names.each do |name|
-            nodes.next(name)
-            audit_admin!('backup', name)
+          if nodes.respond_to?(:queue_backups)
+            nodes.queue_backups(names)
+          else
+            names.each { |name| nodes.next(name) }
           end
+          names.each { |name| audit_admin!('backup', name) }
           admin_mutation_response('queued backups for', names.join(', '))
         when 'group'
           inventory = DeviceInventory.new(nodes, Oxidized.config)
@@ -435,7 +458,7 @@ module Oxidized
       post '/node/next/?*?/:node' do
         require_administrator!
         node, @json = route_parse :node
-        nodes.next node
+        nodes.respond_to?(:queue_backups) ? nodes.queue_backups([node]) : nodes.next(node)
         audit_admin!('backup', node)
         redirect url_for('/nodes') unless @json
         @data = 'ok'
@@ -447,7 +470,7 @@ module Oxidized
         require_administrator!
         node, @json = route_parse :node
         opt = JSON.parse request.body.read
-        nodes.next node, opt
+        nodes.respond_to?(:queue_backups) ? nodes.queue_backups([node], opt) : nodes.next(node, opt)
         audit_admin!('backup', node)
         redirect url_for('/nodes') unless @json
         @data = 'ok'
@@ -470,6 +493,14 @@ module Oxidized
         display_data = apply_backup_summary!(@data.dup)
         @device_status = display_data[:backup_state]
         @device_time = display_data[:last_attempt_at] || 'Not checked this session'
+        @device_failure_reason = {
+          'no_connection' => 'Connection could not be established.',
+          'no_auth' => 'Authentication failed.',
+          'auth_failure' => 'Authentication failed.',
+          'timelimit' => 'Collection exceeded the time limit.',
+          'fail' => 'Core reported a collection failure.',
+          'failure' => 'Core reported a collection failure.'
+        }[display_data[:last_attempt_status].to_s]
         @device_mtime = display_data[:last_changed_at] || 'Unknown'
         @device_revision_count = display_data[:revision_count]
         @management_error = inventory_management_unavailable_reason

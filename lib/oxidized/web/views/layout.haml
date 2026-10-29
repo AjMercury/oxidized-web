@@ -86,6 +86,13 @@
                   %button{type: 'submit'} Sign out
         %main.app-content#main-content
           .page-container
+            - if @current_admin == :admin
+              %section#backup-progress.table-card{hidden: true, :'aria-live' => 'polite', :'data-endpoint' => url_for('/admin/backups.json'), :'data-csrf' => @csrf_token}
+                %strong Configuration collection progress
+                %p#backup-summary
+                %progress#backup-meter{max: 1, value: 0, :'aria-label' => 'Completed configuration collections'}
+                %ul#backup-results
             != yield
+    %script{src: url_for("/scripts/backups.js?v=#{Oxidized::API::WEB_VERSION}")}
     !=haml :footer
 

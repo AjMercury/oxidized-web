@@ -1,6 +1,6 @@
 # Ubuntu 24.04 Build, Deployment, and Rollback
 
-> Superseded for Web 0.24.1 by [the current upgrade and rollback procedure](../ubuntu-24.04-upgrade.md). The commands below describe the earlier 0.24.0 release.
+> Superseded for Core 0.37.3 / Web 0.25.0 by [the current upgrade and rollback procedure](../ubuntu-24.04-upgrade.md). The commands below describe the earlier 0.24.0 release.
 
 This guide prepares versioned gems for review and manual deployment. It does
 not deploy or restart a production service. Device management requires both the

@@ -7,6 +7,9 @@
 
 name: CI
 
+env:
+  BUNDLE_GEMFILE: .github/Gemfile.ci
+
 on: [ push, pull_request ]
 #  push:
 #    branches: [ master ]
@@ -24,6 +27,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v7
+    - name: Install native build dependencies
+      run: sudo apt-get update && sudo apt-get install -y libicu-dev libssh2-1-dev libsqlite3-dev pkg-config cmake
     - name: Set up Ruby
     # To automatically get bug fixes and new Ruby versions for ruby/setup-ruby,
     # change this to (see https://github.com/ruby/setup-ruby#versioning):
@@ -33,3 +38,8 @@ jobs:
         bundler-cache: true # runs 'bundle install' and caches installed gems automatically
     - name: Run tests
       run: bundle exec rake
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '24'
+    - name: Run JavaScript tests
+      run: npm test

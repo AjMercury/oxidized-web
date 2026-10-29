@@ -1,0 +1,6 @@
+source 'https://rubygems.org'
+
+gemspec path: '..'
+
+# The paired fork release adds the queue/status API required by Web 0.25.0.
+gem 'oxidized', git: 'https://github.com/AjMercury/oxidized.git', ref: 'bd03b9ba29c927af87e95ee9503088a7c3e4441d'

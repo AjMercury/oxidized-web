@@ -8,23 +8,32 @@ The requested Fintech skill page (`https://skillsui.app/skills/fintech`) was not
 
 ## Color tokens
 
+`lib/oxidized/web/public/css/oxidized.css` defines the palette as the single CSS source of truth. Templates and components use these variables rather than adding page-specific colors.
+
 | Token | Light | Dark | Use |
 | --- | --- | --- | --- |
-| Canvas | `#F1F5FB` | `#0B1220` | Application workspace |
-| Surface | `#FFFFFF` | `#111C2B` | Tables, forms, panels |
-| Muted surface | `#F7F9FD` | `#162336` | Table headers and controls |
-| Navigation | `#101B32` | `#0A1426` | Sidebar rail |
-| Primary | `#2563EB` | `#72A0FF` | Main action, selected state |
-| Cyan | `#06B6D4` | `#22D3EE` | Focus, network identity |
-| Success | `#059669` | `#42D5A1` | Successful backup only |
-| Warning | `#B77910` | `#F5BD52` | Attention and unknown state |
-| Failure | `#E5485B` | `#FF8292` | Failed backup and destructive actions |
-| Metadata | `#7C3AED` | `#C4B5FD` | Secondary technical metadata |
-| Text | `#142136` | `#E8EEF7` | Primary copy |
-| Muted text | `#66758C` | `#A6B3C5` | Supporting labels |
-| Border | `#D9E2EF` | `#29394F` | Subtle separation |
+| Canvas | `#F5F7FB` | `#0B1020` | Application workspace |
+| Surface | `#FFFFFF` | `#141D30` | Cards, tables, forms, dialogs |
+| Muted surface | `#EEF1F7` | `#1B2740` | Headers, controls, selected rows |
+| Navigation | `#10172A` | `#070B16` | Sidebar rail |
+| Navigation active | `#252D4B` | `#252D4B` | Active sidebar item |
+| Primary / focus | `#5146D8` | `#938AFF` | Primary actions, links, focus, selected tabs |
+| Primary hover | `#4035B8` | `#A9A2FF` | Hovered primary actions |
+| Primary contrast | `#FFFFFF` | `#0B1020` | Text on primary buttons |
+| Primary tint | `#EAE8FC` | `#29264F` | Selected and focus related surfaces |
+| Secondary | `#0E7490` | `#40CFE0` | Secondary information |
+| Info | `#06B6D4` | `#40CFE0` | Informational indicators |
+| Success | `#0C7F70` | `#33C7AB` | Successful backup only |
+| Success surface | `#FFFFFF` | `#163A36` | Successful status icon and badge surface |
+| Failure | `#C13E58` | `#FF708B` | Failed backup and destructive actions |
+| Failure surface | `#FFFFFF` | `#432431` | Failure status icon and badge surface |
+| Warning | `#A0610A` | `#F4BD65` | Warnings and pending states |
+| Warning surface | `#FFFFFF` | `#40331F` | Warning status icon and badge surface |
+| Text | `#182237` | `#E8EDF8` | Main copy |
+| Muted text | `#596780` | `#A6B5CD` | Supporting copy |
+| Border | `#DDE5F0` | `#2E3A52` | Component separation |
 
-Never use status hues as decoration or imply health from missing data. Keep chart series to the status palette plus cyan and purple.
+Status colors only convey their named semantic state. Dashboard metric cards retain neutral surfaces, with semantic color limited to icons and subtle indicators. Distinct vendor marks may use vendor brand colors as an explicit identity exception; they never indicate health or backup status. Charts use palette tokens and labeled legends. Never infer success from missing data. Text, controls, status text, and focus indicators must maintain WCAG 2.2 AA contrast in both themes; labels and symbols supplement color for every state.
 
 ## Typography
 
@@ -36,11 +45,11 @@ Base spacing is 4px, with common increments of 8, 12, 16, and 24px. Use a 224px 
 
 ## Navigation
 
-Use grouped, collapsible Overview, Backups, Devices, and Administration sections. Only implemented routes appear. The active link uses a subdued blue tint with a cyan edge marker. Keep labels visible in expanded mode; collapsed links expose tooltips and accessible names. Mobile navigation is a keyboard-accessible drawer with Escape and outside-click dismissal. Persist desktop collapse preference only.
+Use grouped, collapsible Overview, Backups, Devices, and Administration sections. Only implemented routes appear. The active link uses the muted navigation surface and Indigo Violet edge marker. Keep labels visible in expanded mode; collapsed links expose tooltips and accessible names. Mobile navigation is a keyboard-accessible drawer with Escape and outside-click dismissal. Persist desktop collapse preference only.
 
 ## Buttons and interaction
 
-Primary buttons are blue with white text; secondary buttons use a quiet surface and border. Destructive actions use coral and require a confirmation step. Controls have a 6–8px radius, compact height, visible keyboard focus, and a short 140–180ms hover/focus transition. Avoid gratuitous animation. Honor `prefers-reduced-motion`.
+Primary buttons use Indigo Violet with white text; secondary buttons use a quiet surface and border. Destructive actions use Raspberry and require a confirmation step. Controls have a 6–8px radius, compact height, visible keyboard focus, and a short 140–180ms hover/focus transition. Avoid gratuitous animation. Honor `prefers-reduced-motion`.
 
 ## Forms
 
@@ -60,7 +69,7 @@ Donut and activity charts must be derived from available Oxidized/Git data. Plac
 
 ## Configuration comparison
 
-Use a compact sticky selector row, visible revision IDs and timestamps, and side-by-side monospace panes on wide screens. Use a neutral background for unchanged lines, green for additions, and coral for removals. Keep line numbers and bounded scroll regions. Stack panes below 768px and offer unified comparison on narrow screens. Preserve the underlying Git history exactly.
+Use a compact sticky selector row, visible revision IDs and timestamps, and side-by-side monospace panes on wide screens. Use a neutral background for unchanged lines, Emerald additions, and Raspberry removals. Keep line numbers and bounded scroll regions. Stack panes below 768px and offer unified comparison on narrow screens. Preserve the underlying Git history exactly.
 
 ## Borders and depth
 

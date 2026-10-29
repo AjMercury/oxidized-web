@@ -13,6 +13,7 @@
     %h1 Network operations
     %p Current Core session status and durable saved configuration history.
   .page-heading-actions
+    != haml :backup_all, layout: false
     %label.visually-hidden{for: 'refreshInterval'} Automatic refresh interval
     %select.form-select.form-select-sm#refreshInterval{:'aria-label' => 'Automatic refresh interval'}
       %option{value: '0'} Auto refresh off
@@ -21,10 +22,10 @@
       %option{value: '300'} Every 5 minutes
     %button.btn.btn-outline-secondary{type: 'button', onclick: 'window.location.reload();'}
       %i.bi.bi-arrow-clockwise{:'aria-hidden' => 'true'}
-      Refresh
+      Refresh Dashboard
     %button.btn.btn-outline-secondary#reload{type: 'button', disabled: !@management_error.nil?, title: @management_error}
       %i.bi.bi-arrow-repeat{:'aria-hidden' => 'true'}
-      Reload source
+      Reload Inventory
     - if @management_error.nil?
       %a.btn.btn-primary.btn-add-device{href: url_for('/admin/devices')}
         %i.bi.bi-plus-lg{:'aria-hidden' => 'true'}
@@ -79,7 +80,7 @@
       .chart-heading-copy
         %h2 Vendor distribution
         %p Actual device models in configured inventory
-    - vendor_colors = %w[#2563EB #06B6D4 #10B981 #F59E0B #F43F5E #8B5CF6 #64748B]
+    - vendor_colors = %w[var(--ow-color-accent) var(--ow-color-secondary) var(--ow-color-info) var(--ow-color-success) var(--ow-color-warning) var(--ow-color-danger) var(--ow-color-text-muted)]
     - angle = 0.0
     - segments = vendor_counts.each_with_index.map { |(_vendor, count), index| start_angle = angle; angle += total_nodes.zero? ? 0 : count.to_f / total_nodes * 360; "#{vendor_colors[index % vendor_colors.length]} #{start_angle.round(2)}deg #{angle.round(2)}deg" }
     .vendor-chart-layout
@@ -111,7 +112,7 @@
     - health_share = total_nodes.zero? ? 0 : (successful_nodes.to_f / total_nodes * 100).round
     - health_segments = []
     - health_angle = 0.0
-    - [[successful_nodes, '#10B981'], [failed_nodes, '#F43F5E'], [unchecked_nodes, '#2563EB'], [nodes_without_history, '#94A3B8'], [unsuccessful_nodes, '#F59E0B']].each do |count, color|
+    - [[successful_nodes, 'var(--ow-color-success)'], [failed_nodes, 'var(--ow-color-danger)'], [unchecked_nodes, 'var(--ow-color-accent)'], [nodes_without_history, 'var(--ow-color-text-muted)'], [unsuccessful_nodes, 'var(--ow-color-warning)']].each do |count, color|
       - next if count.zero?
       - start_angle = health_angle
       - health_angle += total_nodes.zero? ? 0 : count.to_f / total_nodes * 360
@@ -217,13 +218,15 @@
                 %i.bi.bi-cloud-download{:'aria-hidden' => 'true'}
               %a.action-link{title: 'View configuration history', :'aria-label' => "View configuration history for #{node[:name]}", href: url_for("/node/version?node_full=#{node[:full_name]}")}
                 %i.bi.bi-clock-history{:'aria-hidden' => 'true'}
-              - if @management_error.nil?
-                %a.action-link{title: 'Edit device', :'aria-label' => "Edit #{node[:name]}", href: url_for("/admin/devices/#{node[:name]}/edit")}
-                  %i.bi.bi-pencil-square{:'aria-hidden' => 'true'}
+              - if @current_admin == :admin
                 %form.inline-action{action: url_for("/node/next/#{node[:full_name]}"), method: 'post'}
                   %input{type: 'hidden', name: 'csrf_token', value: @csrf_token}
                   %button.action-link{title: 'Backup now', :'aria-label' => "Run configuration backup for #{node[:name]}", type: 'submit'}
-                    %i.bi.bi-arrow-repeat{:'aria-hidden' => 'true'}
+                    %i.bi.bi-cloud-arrow-down{:'aria-hidden' => 'true'}
+                    Backup Now
+              - if @management_error.nil?
+                %a.action-link{title: 'Edit device', :'aria-label' => "Edit #{node[:name]}", href: url_for("/admin/devices/#{node[:name]}/edit")}
+                  %i.bi.bi-pencil-square{:'aria-hidden' => 'true'}
                 %form.inline-action{action: url_for("/admin/devices/#{node[:name]}/delete"), method: 'post', onsubmit: "return confirm('Delete this device from the configured inventory? Git backup history will be retained.')"}
                   %input{type: 'hidden', name: 'csrf_token', value: @csrf_token}
                   %button.action-link.action-delete{title: 'Delete device', :'aria-label' => "Delete #{node[:name]} from inventory", type: 'submit'}

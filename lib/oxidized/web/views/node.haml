@@ -20,15 +20,16 @@
     %a.btn.btn-outline-secondary{href: url_for("/node/fetch/#{@device_full_name}")}
       %i.bi.bi-file-earmark-code{:'aria-hidden' => 'true'}
       Configuration
-    - if @management_error.nil?
-      %a.btn.btn-outline-primary{href: url_for("/admin/devices/#{@data[:name]}/edit")}
-        %i.bi.bi-pencil-square{:'aria-hidden' => 'true'}
-        Edit
+    - if @current_admin == :admin
       %form.inline-action{action: url_for("/node/next/#{@device_full_name}"), method: 'post'}
         %input{type: 'hidden', name: 'csrf_token', value: @csrf_token}
         %button.btn.btn-primary{type: 'submit'}
           %i.bi.bi-arrow-repeat{:'aria-hidden' => 'true'}
           Backup Now
+    - if @management_error.nil?
+      %a.btn.btn-outline-primary{href: url_for("/admin/devices/#{@data[:name]}/edit")}
+        %i.bi.bi-pencil-square{:'aria-hidden' => 'true'}
+        Edit
       %form.inline-action{action: url_for("/admin/devices/#{@data[:name]}/delete"), method: 'post', onsubmit: "return confirm('Delete this device from the configured inventory? Git backup history will be retained.')"}
         %input{type: 'hidden', name: 'csrf_token', value: @csrf_token}
         %button.btn.btn-outline-danger{type: 'submit'}
@@ -56,6 +57,7 @@
     %span.detail-label Latest backup
     %strong.status-pill{class: "status-#{@device_status || 'unknown'}"}= (@device_status || 'unknown').to_s.tr('_', ' ')
     %span.detail-value.time{epoch: @device_time && @device_time != 'never' ? @device_time.to_i : ''}= @device_time || 'never'
+    %span.detail-value.status-failure-reason= @device_failure_reason if @device_failure_reason
   .detail-card.detail-card-revisions
     %span.detail-label Saved revisions
     %strong= @device_revision_count.nil? ? 'Unknown' : @device_revision_count

@@ -74,6 +74,7 @@
     %h2 Managed devices
     %p Device state and backup results come from the live Oxidized node inventory.
   .page-heading-actions
+    != haml :backup_all, layout: false
     %a.btn.btn-outline-secondary{href: url_for('/admin/devices/export.csv')}
       %i.bi.bi-download{:'aria-hidden' => 'true'}
       Export inventory
@@ -146,7 +147,8 @@
                 %form.inline-action{action: url_for("/node/next/#{node[:full_name]}"), method: 'post'}
                   %input{type: 'hidden', name: 'csrf_token', value: @csrf_token}
                   %button.action-link{title: 'Run configuration backup', :'aria-label' => "Run backup for #{node[:name]}", type: 'submit'}
-                    %i.bi.bi-arrow-repeat{:'aria-hidden' => 'true'}
+                    %i.bi.bi-cloud-arrow-down{:'aria-hidden' => 'true'}
+                    Backup Now
                 %form.inline-action{action: url_for("/admin/devices/#{node[:name]}/delete"), method: 'post', onsubmit: "return confirm('Delete this device from the configured inventory?')"}
                   %input{type: 'hidden', name: 'csrf_token', value: @csrf_token}
                   %button.action-link.text-danger{title: 'Delete device', :'aria-label' => "Delete #{node[:name]}", type: 'submit'}
