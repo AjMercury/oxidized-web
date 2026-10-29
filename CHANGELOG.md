@@ -34,6 +34,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-10-29
+
+### Added
+- Add vendor and Core-model selectors, vendor/model/status filters, revision counts from stored Git history, and sortable inventory fields.
+- Add read-only viewer credentials alongside the administrator role, plus selected-device CSV export without credential fields.
+- Improve configuration history search and date sorting; add numeric version-sort regression coverage.
+
+### Changed
+- Continue using the configured Core model directory for model discovery; vendor labels are best-effort classifications and do not claim retrieval support.
+- Keep Core at 0.37.1; this release contains Web-only changes.
+
+### Known limitations
+- Local authentic vendor logo assets are not included. The UI retains a generic device glyph and vendor text because the build environment could not reach the public asset package source.
+- Ruby, Haml, gem build, and Linux validation could not be run in this Windows environment; see the compatibility matrix.
+
 
 ## [0.18.1 – 2026-01-19]
 Maintenance release to update dependencies.

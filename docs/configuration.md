@@ -111,6 +111,11 @@ Web application checks the authenticated user and requires an `Origin` or
 accept proxy identity headers. Configure `vhosts` with the public hostname to
 restrict accepted hosts.
 
+Optional read-only management access can use `OXIDIZED_WEB_VIEWER_USERNAME`
+and `OXIDIZED_WEB_VIEWER_PASSWORD`. The viewer can inspect/export the inventory
+but cannot edit, delete, reload, or queue backups. Administrator credentials
+remain required for all writes; the read-only account does not replace them.
+
 The protected reload and manual-backup actions use `POST`; the former `GET`
 forms of `/reload` and `/node/next/...` no longer perform state changes. The
 existing `PUT /node/next/...` JSON API remains available to authenticated

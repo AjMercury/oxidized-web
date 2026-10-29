@@ -52,6 +52,10 @@ resolves the intended Core version with `bundle exec ruby -e 'require "oxidized"
    `OXIDIZED_WEB_ADMIN_PASSWORD` through a root-owned mode-0600 systemd
    environment file. Systemd reads it before starting the service account. Put
    the Web endpoint behind HTTPS and set `vhosts` to the expected host.
+   For inventory read-only access, optionally configure
+   `OXIDIZED_WEB_VIEWER_USERNAME` and `OXIDIZED_WEB_VIEWER_PASSWORD` in the
+   same protected file. Viewer credentials cannot mutate inventory or queue
+   backups; administrator credentials are still required for all writes.
 
 ## Back up before installation
 
@@ -79,7 +83,7 @@ the same RubyGems environment as `/usr/local/bin/oxidized`:
 
 ```sh
 sudo gem install --local ./oxidized-0.37.1.gem
-sudo gem install --local ./oxidized-web-0.19.0.gem
+sudo gem install --local ./oxidized-web-0.20.0.gem
 sudo systemctl daemon-reload
 sudo systemctl restart oxidized.service
 ```
@@ -110,14 +114,17 @@ If the service fails health checks, restore the previously installed gem
 versions and saved files from the protected backup, then restart:
 
 ```sh
-sudo gem uninstall oxidized-web --version 0.19.0 --ignore-dependencies
-sudo gem uninstall oxidized --version 0.37.1 --executables --ignore-dependencies
-sudo gem install --local ./oxidized-0.37.0.gem
-sudo gem install --local ./oxidized-web-0.18.1.1.gem
+sudo gem uninstall oxidized-web --version 0.20.0 --ignore-dependencies
+sudo gem install --local ./oxidized-web-0.19.0.gem
 sudo systemctl daemon-reload
 sudo systemctl restart oxidized.service
 sudo systemctl is-active oxidized.service
 ```
+
+Keep Core at 0.37.1 for this Web-only rollback. If Core itself must be rolled
+back to 0.37.0, install that exact gem separately and remove the Web
+administrator credentials from the service environment because the earlier
+Core does not provide the history-preserving inventory reload API.
 
 Restore application files only if they were changed, and restore the CSV and
 Git output repository only after quiescing Oxidized:
@@ -131,5 +138,5 @@ sudo systemctl restart oxidized.service
 ```
 
 The history-preserving reload does not delete historical configs. Keep the new
-Web gem's administrator environment variables unset or remove them during
-rollback if the previous Web version has no administrator authorization.
+Web gem's administrator and viewer environment variables unset or remove them
+during rollback if the previous Web version has no administrator authorization.

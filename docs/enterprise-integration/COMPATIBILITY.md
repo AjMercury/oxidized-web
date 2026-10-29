@@ -32,6 +32,7 @@ unchanged.
 |---|---|---|---|
 | 0.37.0 | 0.18.1.1 | Existing Web test suite resolved against Core gem 0.37.0; mocked Core API tests and HTTP contract tests | Read/history/backup calls covered; new management feature requires the Core fork branch that adds `clean_obsolete:` |
 | 0.37.1 | 0.19.0 | Core focused `spec/nodes_spec.rb` (14/30); Web Minitest (91/385, 2 Windows skips); JavaScript (8/8); changed-file RuboCop | Core safe reload API and Web management routes verified; Web uses a synthetic Core-compatible node source |
+| 0.37.1 | 0.20.0 | JavaScript (9/9); Ruby/Haml, gem build, and Linux checks unavailable in current Windows runtime | Not fully certified; run the documented Ruby suite and gem build on Ubuntu 24.04 before merge |
 | 0.34.1 | 0.18.1.1 | Gem lower bound only | Not certified; dependency compatibility is not proof of runtime compatibility |
 
 The repository's full Core suite was also attempted on Windows Ruby 3.2.11:
@@ -51,7 +52,9 @@ before merging. No Core/Web version-number equality is assumed.
 - `enabled` is not a Core node-source field and is not represented as a toggle.
 - Inventory export deliberately excludes username and credential fields. Bulk actions cover backup, CSV delete, and group assignment where mapped.
 - POSIX file owner/mode and multi-process lock tests are skipped on Windows; run the Web suite on Ubuntu 24.04 to execute them.
-- Vendor logo files are not included; the UI uses the existing generic icon set and model names. Brand assets require an approved local asset source.
+- Vendor logo files are not included; the UI uses the existing generic device glyph with vendor text and color markers. The environment could not retrieve the public icon package, and these markers are not vendor logos.
+- Vendor labels are best-effort guesses based on model names and must not be interpreted as backup support. The installed Core model list remains the create/edit allowlist.
+- Read-only Device Management access can be configured with `OXIDIZED_WEB_VIEWER_USERNAME` and `OXIDIZED_WEB_VIEWER_PASSWORD`; the administrator credentials remain mandatory and are the only role allowed to mutate inventory.
 - SSH and Telnet ports are supported only when the CSV maps Core's `ssh_port`
   or `telnet_port` node variables.
 - A colon-delimited source cannot represent an IPv6 address containing colons;
