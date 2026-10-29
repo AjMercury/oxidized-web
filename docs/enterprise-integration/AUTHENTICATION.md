@@ -1,6 +1,6 @@
 # Oxidized Web Authentication
 
-Web 0.22.0 requires a local SQLite user database and a valid authenticated
+Web 0.23.0 requires a local SQLite user database and a valid authenticated
 session for every dashboard, configuration, history, inventory, and API route.
 Only the login page and local static assets are public. JSON/text API requests
 without a valid session receive `401`; browser pages redirect to `/login`.
@@ -22,6 +22,26 @@ It requires 12 or more characters and will not create default credentials. The
 first administrator can create administrator and viewer accounts under User
 Management. Administrators can change their password in My Profile. Resetting a
 user password or disabling their account revokes that user's existing sessions.
+
+### Migrate an existing Basic-auth administrator
+
+If the previous service uses `OXIDIZED_WEB_ADMIN_USERNAME` and
+`OXIDIZED_WEB_ADMIN_PASSWORD`, migrate once before removing those variables from
+the protected service environment. Run the command as the service account and
+use the same auth database path configured for Oxidized Web:
+
+```sh
+sudo -u oxidized env OXIDIZED_WEB_AUTH_DB=/var/lib/oxidized/web-auth.sqlite3 \
+  /usr/local/bin/oxidized-web-user migrate-legacy-admin
+```
+
+The command reads the legacy values only from its process environment, hashes
+the password into SQLite, never prints either value, and removes both variables
+from its own environment. It does not run automatically at service startup.
+After success, remove the legacy variables from the protected service file and
+restart Oxidized Web. If the old values are unavailable or do not meet current
+credential validation, use the interactive `bootstrap-admin` command above;
+neither path creates a default account.
 
 ## SQLite database and service environment
 

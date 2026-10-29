@@ -7,12 +7,37 @@ require 'oxidized/web/user_store'
 
 options = { db: Oxidized::API::UserStore.default_path }
 parser = OptionParser.new do |opts|
-  opts.banner = 'Usage: oxidized-web-user bootstrap-admin [--db PATH]'
+  opts.banner = 'Usage: oxidized-web-user bootstrap-admin|migrate-legacy-admin [--db PATH]'
   opts.on('--db PATH', 'Authentication SQLite database path') { |path| options[:db] = path }
 end
 command = ARGV.shift
 parser.parse!(ARGV)
-abort(parser.to_s) unless command == 'bootstrap-admin' && ARGV.empty?
+abort(parser.to_s) unless %w[bootstrap-admin migrate-legacy-admin].include?(command) && ARGV.empty?
+
+if command == 'migrate-legacy-admin'
+  username = ENV.fetch('OXIDIZED_WEB_ADMIN_USERNAME', nil)
+  password = ENV.fetch('OXIDIZED_WEB_ADMIN_PASSWORD', nil)
+  # Remove the old variables from this process as soon as their values are read.
+  ENV.delete('OXIDIZED_WEB_ADMIN_USERNAME')
+  ENV.delete('OXIDIZED_WEB_ADMIN_PASSWORD')
+  abort('Legacy administrator credentials are not available in this process.') if username.to_s.empty? || password.to_s.empty?
+
+  begin
+    store = Oxidized::API::UserStore.new(options[:db])
+    store.create_initial_admin(username, password)
+    puts "Migrated the configured administrator into #{File.expand_path(options[:db])}. The password was not displayed."
+  rescue Oxidized::API::UserStore::Error => e
+    warn e.message
+    exit 1
+  rescue SQLite3::Exception => e
+    warn "Authentication database operation failed (#{e.class})."
+    exit 1
+  ensure
+    username&.clear
+    password&.clear
+  end
+  exit 0
+end
 
 print 'Administrator username: '
 username = $stdin.gets&.chomp

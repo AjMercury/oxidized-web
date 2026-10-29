@@ -1,15 +1,17 @@
 - total_nodes = @data.length
-- successful_nodes = @data.count { |node| node[:status].to_s == 'success' }
-- failed_nodes = @data.count { |node| node[:status].to_s == 'no_connection' }
-- nodes_without_history = @data.count { |node| node[:status].to_s == 'never' }
-- recent_changes = @data.select { |node| node[:mtime] }.sort_by { |node| node[:mtime].to_i }.reverse.first(5)
+- successful_nodes = @data.count { |node| node[:last_attempt_status].to_s == 'success' }
+- failed_attempts = %w[no_connection no_auth auth_failure failure fail error timeout timelimit].freeze
+- failed_nodes = @data.count { |node| failed_attempts.include?(node[:last_attempt_status].to_s) }
+- unchecked_nodes = @data.count { |node| node[:backup_state] == 'not_checked_this_session' }
+- nodes_without_history = @data.count { |node| node[:revision_count] == 0 }
+- recent_changes = @data.select { |node| node[:last_changed_at] }.sort_by { |node| node[:last_changed_at].to_i }.reverse.first(5)
 - vendor_counts = @data.group_by { |node| vendor_for_model(node[:model]) }.transform_values(&:count).sort_by { |vendor, count| [-count, vendor] }
 
 .page-heading
   .page-heading-copy
     %span.eyebrow.text-muted Network overview
     %h1 Network operations
-    %p Live inventory health, configuration history, and device actions.
+    %p Current Core session status and durable saved configuration history.
   .page-heading-actions
     %label.visually-hidden{for: 'refreshInterval'} Automatic refresh interval
     %select.form-select.form-select-sm#refreshInterval{:'aria-label' => 'Automatic refresh interval'}
@@ -51,28 +53,23 @@
     .metric-topline
       %span.metric-icon
         %i.bi.bi-check2-circle{:'aria-hidden' => 'true'}
-      %span.metric-caption Latest backup successful
+    %span.metric-caption Successful this session
     %strong.metric-value{:'data-counter' => successful_nodes}= successful_nodes
-    %span.metric-note Devices whose most recent run succeeded
+    %span.metric-note Most recent Core attempt succeeded
   .metric-card.metric-card-danger
     .metric-topline
       %span.metric-icon
         %i.bi.bi-exclamation-circle{:'aria-hidden' => 'true'}
-      %span.metric-caption Latest backup failed
+    %span.metric-caption Failed this session
     %strong.metric-value{:'data-counter' => failed_nodes}= failed_nodes
-    %span.metric-note Devices whose most recent run failed
+    %span.metric-note Most recent Core attempt failed
   .metric-card.metric-card-muted
     .metric-topline
       %span.metric-icon
         %i.bi.bi-clock-history{:'aria-hidden' => 'true'}
-      %span.metric-caption No backup history
-    %strong.metric-value{:'data-counter' => nodes_without_history}= nodes_without_history
-    %span.metric-note Devices with no recorded latest run
-
-.section-heading
-  .section-heading-copy
-    %h2 Managed devices
-    %p Search, filter, inspect configuration history, or trigger a backup.
+    %span.metric-caption Not checked this session
+    %strong.metric-value{:'data-counter' => unchecked_nodes}= unchecked_nodes
+    %span.metric-note #{nodes_without_history} devices have no stored revisions
 
 .dashboard-grid
   .chart-card.vendor-chart-card
@@ -81,20 +78,26 @@
         %i.bi.bi-pie-chart-fill{:'aria-hidden' => 'true'}
       .chart-heading-copy
         %h2 Vendor distribution
-        %p Filter inventory by platform family
-    - max_vendor_count = [vendor_counts.map(&:last).max.to_i, 1].max
-    .vendor-chart-list
-      - vendor_counts.each do |vendor, count|
-        %button.vendor-chart-row{type: 'button', :'data-vendor-filter' => vendor, :'aria-label' => "Filter devices by #{vendor}, #{count} devices"}
-          %span.vendor-mark{class: "vendor-#{vendor_logo(vendor)}", :'aria-hidden' => 'true'}
-            - if vendor_logo_asset(vendor)
-              %img.vendor-logo{src: url_for("/images/vendors/#{vendor_logo_asset(vendor)}.svg"), alt: '', loading: 'lazy'}
-            - else
-              %i.bi.bi-hdd-network
-          %span.vendor-chart-label= vendor
-          %span.vendor-bar-track
-            %span.vendor-bar{style: "width: #{(count.to_f / max_vendor_count * 100).round}%"}
-          %strong.vendor-chart-count= count
+        %p Actual device models in configured inventory
+    - vendor_colors = %w[#2563EB #06B6D4 #10B981 #F59E0B #F43F5E #8B5CF6 #64748B]
+    - angle = 0.0
+    - segments = vendor_counts.each_with_index.map { |(_vendor, count), index| start_angle = angle; angle += total_nodes.zero? ? 0 : count.to_f / total_nodes * 360; "#{vendor_colors[index % vendor_colors.length]} #{start_angle.round(2)}deg #{angle.round(2)}deg" }
+    .vendor-chart-layout
+      .vendor-donut{style: "--vendor-donut: conic-gradient(#{segments.join(', ')});", :'aria-label' => "Vendor distribution across #{total_nodes} devices"}
+        .vendor-donut-center
+          %strong= total_nodes
+          %span devices
+      .vendor-chart-list
+        - vendor_counts.each do |vendor, count|
+          %button.vendor-chart-row{type: 'button', :'data-vendor-filter' => vendor, :'aria-label' => "Filter devices by #{vendor}, #{count} devices"}
+            %span.vendor-mark{class: "vendor-#{vendor_logo(vendor)}", :'aria-hidden' => 'true'}
+              - if vendor_logo_asset(vendor)
+                %img.vendor-logo{src: url_for("/images/vendors/#{vendor_logo_asset(vendor)}.svg"), alt: '', loading: 'lazy'}
+              - else
+                %i.bi.bi-hdd-network
+            %span.vendor-chart-label= vendor
+            %span.vendor-chart-share #{total_nodes.zero? ? 0 : (count.to_f / total_nodes * 100).round}%
+            %strong.vendor-chart-count= count
     - if vendor_counts.empty?
       .empty-state No vendor data is available in the current inventory.
   .chart-card.health-chart-card
@@ -103,25 +106,44 @@
         %i.bi.bi-heart-pulse-fill{:'aria-hidden' => 'true'}
       .chart-heading-copy
         %h2 Backup health
-        %p Latest run status from Core
+        %p Runtime attempts reset when Core restarts
+    - unsuccessful_nodes = [total_nodes - successful_nodes - failed_nodes - unchecked_nodes - nodes_without_history, 0].max
+    - health_share = total_nodes.zero? ? 0 : (successful_nodes.to_f / total_nodes * 100).round
+    - health_segments = []
+    - health_angle = 0.0
+    - [[successful_nodes, '#10B981'], [failed_nodes, '#F43F5E'], [unchecked_nodes, '#2563EB'], [nodes_without_history, '#94A3B8'], [unsuccessful_nodes, '#F59E0B']].each do |count, color|
+      - next if count.zero?
+      - start_angle = health_angle
+      - health_angle += total_nodes.zero? ? 0 : count.to_f / total_nodes * 360
+      - health_segments << "#{color} #{start_angle.round(2)}deg #{health_angle.round(2)}deg"
+    - health_background = health_segments.empty? ? '#E2E8F0' : "conic-gradient(#{health_segments.join(', ')})"
     .health-visual
-      .health-ring{style: "--success-share: #{total_nodes.zero? ? 0 : (successful_nodes.to_f / total_nodes * 100).round}%", :'aria-label' => "#{successful_nodes} successful, #{failed_nodes} failed, #{nodes_without_history} never backed up"}
+      .health-ring{style: "--health-gradient: #{health_background}", :'aria-label' => "#{successful_nodes} successful this session, #{failed_nodes} failed this session, #{unchecked_nodes} not checked this session, #{nodes_without_history} with no stored revisions"}
         .health-ring-inner
-          %strong= total_nodes.zero? ? '—' : "#{(successful_nodes.to_f / total_nodes * 100).round}%"
-          %span success
+          %strong= total_nodes.zero? ? '—' : "#{health_share}%"
+          %span checked OK
       .health-legend
         .health-legend-row
           %span.health-dot.health-dot-success
-          %span Successful
+          %span Success this session
           %strong= successful_nodes
         .health-legend-row
           %span.health-dot.health-dot-danger
-          %span Failed
+          %span Failed this session
           %strong= failed_nodes
         .health-legend-row
           %span.health-dot.health-dot-muted
-          %span Never backed up
+          %span Not checked this session
+          %strong= unchecked_nodes
+        .health-legend-row
+          %span.health-dot.health-dot-muted
+          %span No saved revisions
           %strong= nodes_without_history
+
+.section-heading
+  .section-heading-copy
+    %h2 Managed devices
+    %p Search, filter, inspect configuration history, or trigger a backup.
 
 .table-card
   .table-toolbar
@@ -142,7 +164,7 @@
     %label.visually-hidden{for: 'statusFilter'} Filter by backup status
     %select.form-select.form-select-sm.inventory-filter#statusFilter{style: 'max-width: 170px'}
       %option{value: ''} All backup states
-      - @data.map { |node| node[:status].to_s.tr('_', ' ') }.uniq.sort.each do |status|
+      - @data.map { |node| node[:backup_state].to_s.tr('_', ' ') }.uniq.sort.each do |status|
         %option{value: status}= status
     %button.btn.btn-outline-secondary.btn-sm#resetSearch{type: 'button'}
       %i.bi.bi-eraser{:'aria-hidden' => 'true'}
@@ -158,8 +180,8 @@
           %th.version-sort Software version
           %th Revision count
           %th Group
-          %th Latest backup
-          %th Last backup time
+          %th Session status
+          %th Last attempt
           %th Last changed
           %th Actions
       %tbody
@@ -178,14 +200,15 @@
               = vendor_for_model(node[:model])
             %td
               %a.model-link{href: url_for("/nodes/model/#{node[:model]}")}= node[:model]
-            %td{:'data-order' => node.dig(:vars, 'version') || node[:version] || 'Unknown'}= node.dig(:vars, 'version') || node[:version] || 'Unknown'
+            %td{:'data-order' => software_version_for(node)}= software_version_for(node)
             %td.text-end{:'data-order' => node[:revision_count].nil? ? -1 : node[:revision_count]}= node[:revision_count].nil? ? 'Unknown' : node[:revision_count]
             %td
               %a.group-link{href: url_for("/nodes/group/#{node[:group]}")}= node[:group]
             %td
-              %span{title: node[:status].to_s.tr('_', ' '), class: node[:status].to_s}= node[:status].to_s.tr('_', ' ')
+              - state_label = node[:backup_state].to_s.tr('_', ' ')
+              %span{title: state_label, class: "status-pill status-#{node[:backup_state]}"}= state_label
             %td.time.text-nowrap{epoch: node[:time] && node[:time] != 'never' ? node[:time].to_i : '', :'data-order' => node[:time] && node[:time] != 'never' ? node[:time].to_i : 0}= node[:time]
-            %td.time.text-nowrap{epoch: node[:mtime] ? node[:mtime].to_i : '', :'data-order' => node[:mtime] ? node[:mtime].to_i : 0}= node[:mtime]
+            %td.time.text-nowrap{epoch: node[:last_changed_at]&.to_i, :'data-order' => node[:last_changed_at]&.to_i || 0}= node[:last_changed_at] || 'Unknown'
             %td.actions-cell
               %a.btn.btn-sm.btn-action.btn-action-view{href: url_for("/node/show/#{node[:full_name]}"), title: 'View details', :'aria-label' => "View details for #{node[:name]}", :'data-bs-toggle' => 'tooltip'}
                 %i.bi.bi-eye{:'aria-hidden' => 'true'}
@@ -205,6 +228,22 @@
                   %input{type: 'hidden', name: 'csrf_token', value: @csrf_token}
                   %button.action-link.action-delete{title: 'Delete device', :'aria-label' => "Delete #{node[:name]} from inventory", type: 'submit'}
                     %i.bi.bi-trash{:'aria-hidden' => 'true'}
+
+.section-heading.activity-heading
+  .section-heading-copy
+    %h2 Backup activity trend
+    %p Stored configuration revisions from Git over the last seven days.
+.chart-card.activity-chart-card
+  - activity = @dashboard_activity || Array.new(7, 0)
+  - peak = [activity.max.to_i, 1].max
+  .activity-bars{:'aria-label' => 'Saved configuration revisions per day for the past seven days'}
+    - 7.times do |index|
+      - date = Date.today - (6 - index)
+      .activity-bar-item
+        .activity-bar-track
+          .activity-bar{style: "height: #{activity[index].zero? ? 2 : [activity[index].to_f / peak * 100, 8].max.round}%", title: "#{activity[index]} saved revisions on #{date.strftime('%b %-d')}"}
+        %strong= activity[index]
+        %span= date.strftime('%a')
 
 :javascript
   $(function() {
@@ -260,13 +299,13 @@
     });
   });
 
-.section-heading.recent-heading
+.section-heading.recent-heading#recent-changes
   .section-heading-copy
     %h2 Recent configuration changes
-    %p Most recently modified device configurations, based on the node modification timestamps.
+    %p Latest saved Git revisions; these remain available after Core restarts.
 .recent-changes-card
   - if recent_changes.empty?
-    .empty-state No device modification timestamps are available.
+    .empty-state No saved Git revisions are available.
   - else
     - recent_changes.each do |node|
       .recent-change-row
@@ -276,6 +315,6 @@
           %a.device-name{href: url_for("/node/show/#{node[:name]}")}= node[:name]
           %span.device-subtitle
             #{node[:model]} · #{node[:group]}
-        %span.time.recent-change-time{epoch: node[:mtime].to_i}= node[:mtime]
+        %span.time.recent-change-time{epoch: node[:last_changed_at].to_i}= node[:last_changed_at]
         %a.action-link{title: 'View configuration history', :'aria-label' => "View configuration history for #{node[:name]}", href: url_for("/node/version?node_full=#{node[:full_name]}")}
           %i.bi.bi-arrow-up-right{:'aria-hidden' => 'true'}

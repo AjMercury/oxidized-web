@@ -29,6 +29,7 @@
             - else
               %i.bi.bi-hdd-network{:'aria-hidden' => 'true'}
             %span= vendor_for_model(@device[:model])
+        .mb-3
           %label.form-label.mt-2{for: 'device-model'} Oxidized model
           %input.form-control#device-model{name: 'model', type: 'search', list: 'oxidized-model-list', value: @device[:model], required: true, autocomplete: 'off'}
           %datalist#oxidized-model-list

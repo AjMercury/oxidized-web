@@ -7,6 +7,7 @@ require 'openssl'
 require 'ipaddr'
 require 'securerandom'
 require 'uri'
+require 'time'
 require 'oxidized/web/device_inventory'
 require 'oxidized/web/user_store'
 module Oxidized
@@ -14,8 +15,12 @@ module Oxidized
     require 'oxidized/web/version'
 
     class WebApp < Sinatra::Base
+      VERSION_CACHE_LOCK = Mutex.new
+      VERSION_CACHE = {} # rubocop:disable Style/MutableConstant
+
       helpers Sinatra::UrlForHelper
       set :public_folder, proc { File.join(root, 'public') }
+      set :static_cache_control, ['public', 'max-age=0', 'must-revalidate']
       # attr_quote: use double quotes for HTML attributes. Set explicitly so the
       # output is stable across Haml versions. Haml 7.3.0 changed the default
       # from "'" to '"' (haml/haml#1188); older versions still default to "'".
@@ -28,7 +33,11 @@ module Oxidized
         response.headers['Referrer-Policy'] = 'same-origin'
         response.headers['Content-Security-Policy'] = "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
         response.headers['Strict-Transport-Security'] = 'max-age=31536000' if settings.auth_require_https
-        response.headers['Cache-Control'] = static_asset_path? ? 'public, max-age=3600' : 'no-store'
+        response.headers['Cache-Control'] = if request.path_info.match?(%r{\A/(?:css|scripts)/})
+                                              'public, max-age=0, must-revalidate'
+                                            else
+                                              static_asset_path? ? 'public, max-age=3600' : 'no-store'
+                                            end
         halt 503, 'Authentication is unavailable. Configure the Oxidized Web SQLite authentication database.' unless auth_store
         enforce_https!
 
@@ -217,14 +226,8 @@ module Oxidized
                         value.to_sym == :default
                       )
 
-          node[:status] = 'never'
-          node[:time]   = 'never'
-          node[:group]  = 'default' unless node[:group]
-          if node[:last]
-            node[:status] = node[:last][:status]
-            node[:time]   = node[:last][:end]
-          end
-          node[:revision_count] = revision_count_for(node)
+          node[:group] = 'default' unless node[:group]
+          apply_backup_summary!(node)
           node
         end
         out :nodes
@@ -234,16 +237,11 @@ module Oxidized
         @management_error = inventory_management_unavailable_reason
         @data = nodes.list.map do |node|
           node = filter_node_vars(node)
-          node[:status] = 'never'
-          node[:time]   = 'never'
-          node[:group]  = 'default' unless node[:group]
-          if node[:last]
-            node[:status] = node[:last][:status]
-            node[:time]   = node[:last][:end]
-          end
-          node[:revision_count] = revision_count_for(node)
+          node[:group] = 'default' unless node[:group]
+          apply_backup_summary!(node)
           node
         end
+        @dashboard_activity = dashboard_revision_activity(@data)
         out :nodes
       end
 
@@ -468,10 +466,11 @@ module Oxidized
           @data = filter_node_vars(nodes.show(node_path))
           @device_full_name = @data[:full_name] || node_path
         end
-        @device_status = @data.dig(:last, :status) || 'unknown'
-        @device_time = @data.dig(:last, :end) || 'never'
-        @device_mtime = @data[:mtime]
-        @device_revision_count = revision_count_for(@data)
+        display_data = apply_backup_summary!(@data.dup)
+        @device_status = display_data[:backup_state]
+        @device_time = display_data[:last_attempt_at] || 'Not checked this session'
+        @device_mtime = display_data[:last_changed_at] || 'Unknown'
+        @device_revision_count = display_data[:revision_count]
         @management_error = inventory_management_unavailable_reason
         out :node
       end
@@ -820,10 +819,7 @@ module Oxidized
       end
 
       def revision_count_for(node)
-        return nil unless nodes.respond_to?(:version)
-
-        revisions = nodes.version(node[:name], node[:group])
-        revisions.length if revisions.is_a?(Array)
+        backup_history_for(node)[:count]
       rescue StandardError => e
         logger.warn("Unable to read backup revision count for #{node[:name]} (#{e.class})")
         nil
@@ -840,10 +836,128 @@ module Oxidized
         nodes.list.map do |serialized_node|
           node = filter_node_vars(serialized_node)
           node[:group] ||= 'default'
-          node[:status] = node.dig(:last, :status) || 'never'
-          node[:time] = node.dig(:last, :end) || 'never'
+          apply_backup_summary!(node)
           node
         end
+      end
+
+      # Core's last-run fields live in memory and reset when oxidized restarts.
+      # Git history is the durable source for saved revisions and change time.
+      # Keep the legacy status/time keys for API compatibility, while exposing
+      # explicit fields that let clients distinguish session state from history.
+      def apply_backup_summary!(node)
+        history = backup_history_for(node)
+        last = node[:last]
+        node[:status] = last ? last[:status].to_s : 'never'
+        node[:time] = last ? last[:end] : 'never'
+        node[:last_attempt_status] = last ? last[:status].to_s : nil
+        node[:last_attempt_at] = last && usable_timestamp(last[:end])
+        node[:revision_count] = history[:count]
+        node[:last_stored_revision_at] = history[:latest_at]
+        node[:last_changed_at] = usable_timestamp(node[:mtime]) || history[:latest_at]
+        node[:backup_state] = if last
+                                last[:status].to_s
+                              elsif history[:count].to_i.positive?
+                                'not_checked_this_session'
+                              else
+                                'never_backed_up'
+                              end
+        node
+      end
+
+      def backup_history_for(node)
+        @backup_history_cache ||= {}
+        key = [node[:group].to_s, node[:name].to_s]
+        return @backup_history_cache[key] if @backup_history_cache.has_key?(key)
+
+        revisions = nodes.respond_to?(:version) ? nodes.version(node[:name], node[:group]) : nil
+        revisions = [] unless revisions.is_a?(Array)
+        latest = revisions.first
+        latest_at = latest.is_a?(Hash) ? (latest[:time] || latest['time']) : nil
+        latest_oid = latest.is_a?(Hash) ? (latest[:oid] || latest['oid']) : nil
+        @backup_history_cache[key] = { count: revisions.length, latest_at: usable_timestamp(latest_at), latest_oid: latest_oid, revisions: revisions }
+      rescue StandardError => e
+        logger.warn("Unable to read backup history for #{node[:name]} (#{e.class})")
+        @backup_history_cache[key] = { count: nil, latest_at: nil, latest_oid: nil, revisions: [] }
+      end
+
+      def dashboard_revision_activity(device_nodes)
+        counts = Array.new(7, 0)
+        today = Time.now.to_date
+        device_nodes.each do |node|
+          revisions = backup_history_for(node)[:revisions]
+          next unless revisions.is_a?(Array)
+
+          revisions.each do |revision|
+            raw = revision.is_a?(Hash) ? (revision[:time] || revision['time']) : nil
+            date = timestamp_time(raw)&.to_date if raw
+            offset = (today - date).to_i if date
+            counts[6 - offset] += 1 if offset&.between?(0, 6)
+          end
+        rescue StandardError => e
+          logger.warn("Unable to read revision activity for #{node[:name]} (#{e.class})")
+        end
+        counts
+      end
+
+      def software_version_for(node)
+        supplied = node.dig(:vars, 'version') || node.dig(:vars, :version) || node[:version]
+        return supplied unless supplied.to_s.strip.empty? || supplied.to_s.casecmp('unknown').zero?
+
+        history = backup_history_for(node)
+        return 'Unknown' if history[:latest_oid].to_s.empty?
+
+        key = [node[:group].to_s, node[:name].to_s, node[:model].to_s, history[:latest_oid].to_s]
+        self.class::VERSION_CACHE_LOCK.synchronize do
+          return self.class::VERSION_CACHE[key] if self.class::VERSION_CACHE.has_key?(key)
+        end
+        config = if nodes.respond_to?(:get_version)
+                   nodes.get_version(node[:name], node[:group], history[:latest_oid])
+                 else
+                   nodes.fetch(node[:name], node[:group])
+                 end
+        version = parse_software_version(node[:model], config)
+        self.class::VERSION_CACHE_LOCK.synchronize do
+          self.class::VERSION_CACHE.shift while self.class::VERSION_CACHE.length >= 2048
+          self.class::VERSION_CACHE[key] = version
+        end
+        version
+      rescue StandardError => e
+        logger.warn("Unable to detect software version for #{node[:name]} (#{e.class})")
+        'Unknown'
+      end
+
+      def parse_software_version(model, config)
+        text = config.to_s
+        case model.to_s.downcase
+        when /routeros|mikrotik/
+          match = text.match(/^\s*#\s*[^\r\n]*?\bRouterOS\s+(\d+\.\d+(?:\.\d+)?(?:[a-zA-Z0-9.-]*))\b/i)
+          "RouterOS #{match[1]}" if match
+        when /ios\b|iosxe|ios_xe/
+          match = text.match(/^\s*version\s+(\d+(?:\.\d+)+(?:[A-Za-z0-9.-]*))\s*$/i)
+          "IOS #{match[1]}" if match
+        when /nxos|nx_os/
+          match = text.match(/^\s*!?\s*NX-OS(?:\s+version)?\s*[: ]\s*(\d+(?:\.\d+)+(?:[A-Za-z0-9.-]*))\s*$/i)
+          "NX-OS #{match[1]}" if match
+        when /junos|juniper/
+          match = text.match(/^\s*#?\s*Junos:\s*(\d+(?:\.\d+[A-Za-z0-9.-]*)+)\s*$/i)
+          "Junos #{match[1]}" if match
+        end || 'Unknown'
+      end
+
+      def usable_timestamp(value)
+        timestamp_time(value)
+      end
+
+      def timestamp_time(value)
+        return value if value.is_a?(Time)
+
+        text = value.to_s
+        return Time.at(text.to_i) if text.match?(/\A\d+\z/)
+
+        Time.parse(text)
+      rescue ArgumentError, TypeError
+        nil
       end
 
       def admin_mutation_response(action, name, status_code = nil)

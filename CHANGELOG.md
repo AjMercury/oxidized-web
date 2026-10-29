@@ -3,6 +3,35 @@
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+## [0.23.0] - 2026-10-29
+
+### Added
+- Add Core-history-backed dashboard activity, revision timelines, and explicit last-attempt, last-stored-revision, and session-unchecked status fields that survive Core restarts.
+- Parse reliable RouterOS, IOS, NX-OS, and Junos software version strings from the latest stored configuration without initiating SSH connections.
+- Add compact overview charts, grouped/collapsible navigation, a saved desktop sidebar preference, and a mobile hamburger sidebar.
+- Add a one-time migration command for configured legacy administrator environment credentials into the session-based SQLite account store without printing secrets.
+
+### Changed
+- Cache per-request Git history and bounded firmware metadata lookups to avoid repeated per-device history queries.
+- Preserve existing `/node/show` JSON response fields while displaying durable backup metadata in the HTML detail view.
+- Compact dashboard and management controls, make vendor/model form fields align consistently, and prevent mobile top-bar horizontal overflow.
+- Show line numbers in both side-by-side and unified configuration diffs.
+- Apply revalidation headers to local CSS, JavaScript, and other static assets so visual fixes are not hidden by stale browser caches.
+
+### Fixed
+- Distinguish “Not checked this session” from “Never backed up” when Git revisions exist after an Oxidized restart.
+- Correct dashboard backup counts to derive “no saved revisions” from durable Git history instead of volatile Core runtime status.
+- Count Core `fail` and `timelimit` backup outcomes as failures instead of hiding them in the dashboard's residual status segment.
+- Include the device model in the bounded firmware metadata cache key so model changes cannot reuse a parser result from a prior model.
+- Fix the 390px viewport horizontal overflow caused by the responsive header.
+- Keep existing node-show API serialization compatible while computing additional HTML dashboard metadata.
+
+### Compatibility and verification
+- Compatible target: Oxidized Core 0.37.2 and Oxidized Web 0.23.0. Core is unchanged in this release.
+- Windows Ruby 3.2.3: Web Minitest 120 runs / 584 assertions, 0 failures/errors, 4 platform skips; RuboCop 23 files with no offenses; JavaScript 12/12.
+- Real Chrome smoke checks against synthetic local data verified login, dashboard, device management, add/edit/delete, details, history, diff, user management, dark mode, collapsed navigation, and viewport sizes 1920×1080, 1440×900, 1366×768, 1024×768, 768×1024, and 390×844. No page-level overflow was observed at 390px.
+- Windows-only execution; Ubuntu 24.04/Linux checks and production deployment have not been performed.
+
 ## [0.19.0] - 2026-10-29
 
 ### Added

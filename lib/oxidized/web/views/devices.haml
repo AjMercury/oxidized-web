@@ -33,9 +33,10 @@
               %option{value: ''} All vendors
               - @models.map { |model| vendor_for_model(model) }.uniq.sort.each do |vendor|
                 %option{value: vendor, :'data-logo-url' => vendor_logo_asset(vendor) && url_for("/images/vendors/#{vendor_logo_asset(vendor)}.svg")}= vendor
-          .vendor-selector-brand#vendorLogoPreview{:'aria-live' => 'polite'}
-            %i.bi.bi-hdd-network{:'aria-hidden' => 'true'}
-            %span Select a vendor to preview its logo
+            .vendor-selector-brand#vendorLogoPreview{:'aria-live' => 'polite'}
+              %i.bi.bi-hdd-network{:'aria-hidden' => 'true'}
+              %span Select a vendor to preview its logo
+          .mb-3
             %label.form-label.mt-2{for: 'device-model'} Oxidized model
             %input.form-control#device-model{name: 'model', type: 'search', list: 'oxidized-model-list', placeholder: 'Search installed Core models…', required: true, autocomplete: 'off'}
             %datalist#oxidized-model-list
@@ -119,8 +120,8 @@
             %td= node[:model]
             %td= node[:group]
             %td
-              %span{class: "#{node[:status]}"}= node[:status].to_s.tr('_', ' ')
-            %td.time.text-nowrap{epoch: node[:time] == 'never' ? '' : node[:time].to_i}= node[:time]
+              %span.status-pill{class: "status-#{node[:backup_state]}"}= node[:backup_state].to_s.tr('_', ' ')
+            %td.time.text-nowrap{epoch: node[:last_attempt_at] ? node[:last_attempt_at].to_time.to_i : ''}= node[:last_attempt_at] || 'Not checked this session'
             %td.actions-cell
               - if @current_admin != :viewer
                 %a.action-link{title: 'Edit device', :'aria-label' => "Edit #{node[:name]}", href: url_for("/admin/devices/#{node[:name]}/edit")}

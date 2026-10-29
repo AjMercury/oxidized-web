@@ -15,7 +15,12 @@ function createClassList() {
     add: (value) => values.add(value),
     remove: (value) => values.delete(value),
     contains: (value) => values.has(value),
-    toggle(value) {
+    toggle(value, force) {
+      if (typeof force === 'boolean') {
+        if (force) values.add(value);
+        else values.delete(value);
+        return force;
+      }
       if (values.has(value)) {
         values.delete(value);
         return false;
@@ -29,19 +34,27 @@ function createClassList() {
 function setup() {
   const documentListeners = {};
   const buttonListeners = {};
+  const collapseListeners = {};
   const linkListeners = {};
   const attributes = {};
+  const collapseAttributes = {};
   const toggle = {
     setAttribute: (name, value) => { attributes[name] = value; },
     addEventListener: (name, listener) => { buttonListeners[name] = listener; },
     contains: (target) => target === toggle,
     focus() { toggle.focused = true; }
   };
+  const collapseToggle = {
+    setAttribute: (name, value) => { collapseAttributes[name] = value; },
+    addEventListener: (name, listener) => { collapseListeners[name] = listener; },
+    set title(value) { collapseToggle._title = value; }
+  };
   const link = {
     addEventListener: (name, listener) => { linkListeners[name] = listener; },
     focus() { link.focused = true; }
   };
   const search = { focus() { search.focused = true; } };
+  const preferences = {};
   const sidebar = {
     inert: false,
     setAttribute: (name, value) => { sidebar[name] = value; },
@@ -51,7 +64,7 @@ function setup() {
   const document = {
     body: { classList: createClassList() },
     addEventListener: (name, listener) => { documentListeners[name] = listener; },
-    getElementById: (id) => ({ 'sidebar-toggle': toggle, 'app-sidebar': sidebar,
+    getElementById: (id) => ({ 'sidebar-toggle': toggle, 'sidebar-collapse-toggle': collapseToggle, 'app-sidebar': sidebar,
       'global-config-search': search }[id] || null),
     querySelectorAll: () => [],
     querySelector: () => ({ href: '#global-config-search', ...link })
@@ -59,6 +72,7 @@ function setup() {
   const windowListeners = {};
   let isMobile = true;
   const window = {
+    localStorage: { getItem: (key) => preferences[key] || null, setItem: (key, value) => { preferences[key] = value; } },
     matchMedia: () => ({ matches: isMobile }),
     addEventListener: (name, listener) => { windowListeners[name] = listener; }
   };
@@ -66,8 +80,8 @@ function setup() {
   vm.runInNewContext(source, { document, window });
   documentListeners.DOMContentLoaded();
 
-  return { document, documentListeners, buttonListeners, linkListeners, attributes,
-    toggle, sidebar, search, windowListeners, setMobile(value) { isMobile = value; } };
+  return { document, documentListeners, buttonListeners, collapseListeners, collapseAttributes, linkListeners, attributes,
+    toggle, sidebar, search, windowListeners, preferences, setMobile(value) { isMobile = value; } };
 }
 
 test('mobile menu opens with synchronized accessibility state and focus', () => {
@@ -120,4 +134,15 @@ test('resizing to desktop removes the mobile inert state', () => {
 
   assert.equal(ui.sidebar.inert, false);
   assert.equal(ui.sidebar['aria-hidden'], 'false');
+});
+
+test('desktop sidebar collapse is keyboard-operable and saved as a preference', () => {
+  const ui = setup();
+  ui.setMobile(false);
+  ui.collapseListeners.click();
+
+  assert.equal(ui.document.body.classList.contains('sidebar-collapsed'), true);
+  assert.equal(ui.collapseAttributes['aria-pressed'], 'true');
+  assert.equal(ui.collapseAttributes['aria-label'], 'Expand sidebar');
+  assert.equal(ui.preferences['oxidized-sidebar-collapsed'], 'true');
 });

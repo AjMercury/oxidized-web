@@ -87,7 +87,7 @@ the same RubyGems environment as `/usr/local/bin/oxidized`:
 
 ```sh
 sudo gem install --local ./oxidized-0.37.2.gem
-sudo gem install --local ./oxidized-web-0.22.0.gem
+sudo gem install --local ./oxidized-web-0.23.0.gem
 sudo install -o oxidized -g oxidized -m 0700 -d /var/lib/oxidized
 sudo -u oxidized env OXIDIZED_WEB_AUTH_DB=/var/lib/oxidized/web-auth.sqlite3 \
   /usr/local/bin/oxidized-web-user bootstrap-admin
@@ -129,26 +129,24 @@ If the service fails health checks, restore the previously installed gem
 versions and saved files from the protected backup, then restart:
 
 ```sh
-sudo gem uninstall oxidized-web --version 0.22.0 --ignore-dependencies
-sudo gem install --local ./oxidized-web-0.21.0.gem
+sudo gem uninstall oxidized-web --version 0.23.0 --ignore-dependencies
+sudo gem install --local ./oxidized-web-0.22.0.gem
 sudo systemctl daemon-reload
 sudo systemctl restart oxidized.service
 sudo systemctl is-active oxidized.service
 ```
 
-If reverting both releases, restore the saved Core 0.37.1 gem as well. Web
-0.20.0 is compatible with Core 0.37.1 but does not include the RouterOS export
-timestamp fix from Core 0.37.2. Keep history-safe inventory writes disabled if
-the Core API is rolled back to a version without `clean_obsolete: false`.
+Core 0.37.2 is unchanged by this release and does not need to be reinstalled.
+If Core is separately rolled back to a version without `clean_obsolete: false`,
+keep Web inventory writes disabled. Restore a previously backed-up Core gem
+only when Core itself was changed during the same approved maintenance window.
 
 When the saved gems are available in the working directory, the exact package
 rollback is:
 
 ```sh
-sudo gem uninstall oxidized-web --version 0.22.0 --ignore-dependencies
-sudo gem install --local ./oxidized-web-0.21.0.gem
-sudo gem uninstall oxidized --version 0.37.2 --ignore-dependencies
-sudo gem install --local ./oxidized-0.37.1.gem
+sudo gem uninstall oxidized-web --version 0.23.0 --ignore-dependencies
+sudo gem install --local ./oxidized-web-0.22.0.gem
 sudo systemctl daemon-reload
 sudo systemctl restart oxidized.service
 sudo systemctl is-active oxidized.service
@@ -165,8 +163,7 @@ sudo cp -a /var/backups/oxidized-pre-enterprise/oxidized.git /var/lib/oxidized/
 sudo systemctl restart oxidized.service
 ```
 
-The history-preserving reload does not delete historical configs. Web 0.21.0
-uses the previous environment-based management credentials; restore those
-protected settings only if the operator intentionally rolls back to that Web
-version. Keep the SQLite authentication database backed up; do not delete it
-when rolling back, because it contains the local users and audit history.
+The history-preserving reload does not delete historical configs. Keep the
+SQLite authentication database backed up; do not delete it when rolling back,
+because it contains the local users and audit history. Web 0.22.0 also uses
+session authentication and remains compatible with Core 0.37.2.

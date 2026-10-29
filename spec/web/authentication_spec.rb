@@ -40,6 +40,7 @@ describe 'Web authentication' do
 
     get '/css/oxidized.css'
     _(last_response.ok?).must_equal true
+    _(last_response.headers['Cache-Control']).must_equal 'public, max-age=0, must-revalidate'
 
     get '/node/version/diffs?node=router1&oid=deadbeef'
     _(last_response.status).must_equal 302
