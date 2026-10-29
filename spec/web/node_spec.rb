@@ -4,7 +4,7 @@ describe Oxidized::API::WebApp do
   include Rack::Test::Methods
 
   def app
-    Oxidized::API::WebApp
+    AuthenticatedWebTestGateway
   end
 
   before do
@@ -13,6 +13,7 @@ describe Oxidized::API::WebApp do
     app.set(:configuration, {
               hide_node_vars: [], admin_username: 'test-admin', admin_password: 'test-password'
             })
+    AuthenticatedWebTestGateway.prepare
   end
 
   def admin_headers
@@ -107,24 +108,25 @@ describe Oxidized::API::WebApp do
     end
 
     it 'requires administrator authentication and a same-origin request' do
+      AuthenticatedWebTestGateway.clear
       @nodes.expects(:next).never
 
       post '/node/next/sw42.json'
       _(last_response.status).must_equal 401
 
+      AuthenticatedWebTestGateway.prepare
       post '/node/next/sw42.json', {},
-           'HTTP_AUTHORIZATION' => admin_headers['HTTP_AUTHORIZATION'],
            'HTTP_ORIGIN' => 'https://attacker.example'
       _(last_response.status).must_equal 403
     end
 
-    it 'fails closed when administrator credentials are not configured' do
-      app.set(:configuration, { hide_node_vars: [], admin_username: nil, admin_password: nil })
+    it 'denies backup triggering to viewer accounts' do
+      AuthenticatedWebTestGateway.as_role(:viewer)
       @nodes.expects(:next).never
 
       post '/node/next/sw42.json', {}, admin_headers
 
-      _(last_response.status).must_equal 503
+      _(last_response.status).must_equal 403
     end
   end
 end

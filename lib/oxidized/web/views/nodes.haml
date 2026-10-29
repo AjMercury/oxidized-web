@@ -198,9 +198,11 @@
                 %a.action-link{title: 'Edit device', :'aria-label' => "Edit #{node[:name]}", href: url_for("/admin/devices/#{node[:name]}/edit")}
                   %i.bi.bi-pencil-square{:'aria-hidden' => 'true'}
                 %form.inline-action{action: url_for("/node/next/#{node[:full_name]}"), method: 'post'}
+                  %input{type: 'hidden', name: 'csrf_token', value: @csrf_token}
                   %button.action-link{title: 'Backup now', :'aria-label' => "Run configuration backup for #{node[:name]}", type: 'submit'}
                     %i.bi.bi-arrow-repeat{:'aria-hidden' => 'true'}
                 %form.inline-action{action: url_for("/admin/devices/#{node[:name]}/delete"), method: 'post', onsubmit: "return confirm('Delete this device from the configured inventory? Git backup history will be retained.')"}
+                  %input{type: 'hidden', name: 'csrf_token', value: @csrf_token}
                   %button.action-link.action-delete{title: 'Delete device', :'aria-label' => "Delete #{node[:name]} from inventory", type: 'submit'}
                     %i.bi.bi-trash{:'aria-hidden' => 'true'}
 

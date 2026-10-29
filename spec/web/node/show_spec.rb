@@ -3,7 +3,7 @@ describe Oxidized::API::WebApp do
   include Rack::Test::Methods
 
   def app
-    Oxidized::API::WebApp
+    AuthenticatedWebTestGateway
   end
 
   def expected_json_body(hide_vars: false)
@@ -31,6 +31,7 @@ describe Oxidized::API::WebApp do
   before do
     @nodes = mock('Oxidized::Nodes')
     app.set(:nodes, @nodes)
+    AuthenticatedWebTestGateway.prepare
 
     @serialized_node = {
       name: "sw5",

@@ -4,12 +4,13 @@ describe Oxidized::API::WebApp do
   include Rack::Test::Methods
 
   def app
-    Oxidized::API::WebApp
+    AuthenticatedWebTestGateway
   end
 
   before do
     @nodes = mock('Oxidized::Nodes')
     app.set(:nodes, @nodes)
+    AuthenticatedWebTestGateway.prepare
   end
 
   describe 'get /node/version.?:format?' do

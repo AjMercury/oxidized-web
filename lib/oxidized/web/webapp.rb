@@ -3,10 +3,12 @@ require 'sinatra/url_for'
 require 'tilt/haml'
 require 'htmlentities'
 require 'charlock_holmes'
-require 'base64'
 require 'openssl'
+require 'ipaddr'
+require 'securerandom'
 require 'uri'
 require 'oxidized/web/device_inventory'
+require 'oxidized/web/user_store'
 module Oxidized
   module API
     require 'oxidized/web/version'
@@ -18,28 +20,180 @@ module Oxidized
       # output is stable across Haml versions. Haml 7.3.0 changed the default
       # from "'" to '"' (haml/haml#1188); older versions still default to "'".
       set :haml, { escape_html: true, attr_quote: '"' }
+      set :sessions, false
 
       before do
-        admin_path = request.path_info.match?(%r{\A/reload(?:\.[^/]+)?\z}) ||
-                     request.path_info.start_with?('/admin/devices', '/node/next/')
-        if admin_path
-          if request.request_method == 'GET'
-            if request.path_info == '/admin/devices' && !administrator_credentials_configured?
-              status 503
-              @admin_disabled_reason = 'Set OXIDIZED_WEB_ADMIN_USERNAME and OXIDIZED_WEB_ADMIN_PASSWORD in the Oxidized service environment. Inventory changes also require HTTPS and a supported writable CSV source.'
-              halt haml(:admin_unavailable, layout: true)
+        response.headers['X-Content-Type-Options'] = 'nosniff'
+        response.headers['X-Frame-Options'] = 'DENY'
+        response.headers['Referrer-Policy'] = 'same-origin'
+        response.headers['Content-Security-Policy'] = "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+        response.headers['Strict-Transport-Security'] = 'max-age=31536000' if settings.auth_require_https
+        response.headers['Cache-Control'] = static_asset_path? ? 'public, max-age=3600' : 'no-store'
+        halt 503, 'Authentication is unavailable. Configure the Oxidized Web SQLite authentication database.' unless auth_store
+        enforce_https!
+
+        if public_auth_path?
+          prepare_login_session! if request.path_info == '/login'
+        else
+          session = auth_store.find_session(request.cookies['oxidized_web_session'])
+          @current_user = session && session[:user]
+          @current_admin = @current_user && (@current_user[:role] == :administrator ? :admin : :viewer)
+          @csrf_token = session && session[:csrf_token]
+          unless @current_user
+            auth_store.invalidate_session(request.cookies['oxidized_web_session']) if request.cookies['oxidized_web_session']
+            clear_session_cookie
+            if api_request?
+              content_type :json
+              halt 401, JSON.generate(error: 'authentication_required')
             end
-            @current_admin = authenticate_management_user!
-            halt 403, 'This account has read-only inventory access.' if @current_admin == :viewer && request.path_info.end_with?('/edit')
-          else
-            authenticate_admin!
+
+            redirect url_for("/login?return_to=#{Rack::Utils.escape(request.fullpath)}")
+            halt
           end
-          verify_admin_origin! unless request.request_method == 'GET'
+
+          unless %w[GET HEAD OPTIONS].include?(request.request_method)
+            verify_csrf!
+            verify_admin_origin!
+          end
         end
+      end
+
+      error UserStore::Error do
+        logger.error('Web authentication storage failed.')
+        status 503
+        'Authentication service is unavailable. Check the Oxidized Web authentication database.'
+      end
+
+      error SQLite3::Exception do
+        logger.error('Web authentication database operation failed.')
+        status 503
+        'Authentication service is unavailable. Check the Oxidized Web authentication database.'
       end
 
       get '/' do
         redirect url_for('/nodes')
+      end
+
+      get '/login' do
+        redirect url_for('/nodes') if @current_user
+        @return_to = safe_return_path(params['return_to'])
+        @remembered_username = request.cookies['oxidized_web_username'].to_s
+        haml :login, layout: false
+      end
+
+      post '/login' do
+        client_ip = client_ip_address
+        attempted_username = params['username'].to_s.byteslice(0, 64).to_s.downcase
+        # Do not create a proxy-wide lockout bucket: one client must not be
+        # able to block every user behind a shared reverse proxy.
+        keys = ["user:#{client_ip}:#{attempted_username}"]
+        if auth_store.login_locked?(keys)
+          status 429
+          @login_error = 'Too many failed sign-in attempts. Wait 15 minutes and try again.'
+          @return_to = safe_return_path(params['return_to'])
+          haml :login, layout: false
+        else
+          user = auth_store.authenticate(params['username'], params['password'])
+          unless user
+            auth_store.record_login_failure(keys)
+            status 401
+            @login_error = 'Username or password is incorrect, or this account is disabled.'
+            @return_to = safe_return_path(params['return_to'])
+            halt haml(:login, layout: false)
+          end
+
+          auth_store.clear_login_failures(keys)
+          auth_store.invalidate_session(request.cookies['oxidized_web_session'])
+          issued = auth_store.create_session(user[:id])
+          issue_session_cookie(issued[:id])
+          set_cookie('oxidized_web_username', params['remember_username'] == '1' ? user[:username] : '',
+                     httponly: true, max_age: params['remember_username'] == '1' ? 2_592_000 : 0)
+          auth_store.record_audit(user[:id], 'login', user[:username])
+          redirect url_for(safe_return_path(params['return_to']) || '/nodes')
+        end
+      end
+
+      post '/logout' do
+        auth_store.invalidate_session(request.cookies['oxidized_web_session'])
+        auth_store.record_audit(@current_user[:id], 'logout', @current_user[:username])
+        clear_session_cookie
+        redirect url_for('/login')
+      end
+
+      get '/profile' do
+        haml :profile, layout: true
+      end
+
+      post '/profile/password' do
+        password = params['new_password'].to_s
+        halt 422, 'The new password confirmation does not match.' unless params['new_password_confirmation'].to_s == password
+        halt 403, 'Current password is incorrect.' unless auth_store.authenticate(@current_user[:username], params['current_password'])
+
+        auth_store.update_user(@current_user[:id], password: password)
+        issued = auth_store.create_session(@current_user[:id])
+        issue_session_cookie(issued[:id])
+        auth_store.record_audit(@current_user[:id], 'change_password', @current_user[:username])
+        redirect url_for('/profile?password_changed=1')
+      rescue UserStore::Error => e
+        status 422
+        @profile_error = e.message
+        haml :profile, layout: true
+      end
+
+      get '/admin/users' do
+        require_administrator!
+        @users = auth_store.users
+        haml :users, layout: true
+      end
+
+      get '/admin/users/new' do
+        require_administrator!
+        @user = { username: '', role: :viewer, enabled: true }
+        haml :user_form, layout: true
+      end
+
+      post '/admin/users' do
+        require_administrator!
+        user = auth_store.create_user(username: params['username'], password: params['password'], role: params['role'])
+        auth_store.record_audit(@current_user[:id], 'create_user', user[:username])
+        redirect url_for('/admin/users')
+      rescue UserStore::Error => e
+        status 422
+        @user = params
+        @form_error = e.message
+        haml :user_form, layout: true
+      end
+
+      get '/admin/users/:id/edit' do
+        require_administrator!
+        @user = auth_store.users.find { |user| user[:id] == params[:id].to_i }
+        halt 404, 'User not found.' unless @user
+        haml :user_form, layout: true
+      end
+
+      post '/admin/users/:id' do
+        require_administrator!
+        enabled = params['enabled'] == '1'
+        user = auth_store.update_user(params[:id], username: params['username'], role: params['role'],
+                                                   enabled: enabled, password: params['password'])
+        auth_store.record_audit(@current_user[:id], 'update_user', user[:username])
+        redirect url_for('/admin/users')
+      rescue UserStore::Error => e
+        status 422
+        @user = params.merge('id' => params[:id])
+        @form_error = e.message
+        haml :user_form, layout: true
+      end
+
+      post '/admin/users/:id/delete' do
+        require_administrator!
+        halt 403, 'You cannot delete the account you are using.' if params[:id].to_i == @current_user[:id]
+
+        user = auth_store.delete_user(params[:id])
+        auth_store.record_audit(@current_user[:id], 'delete_user', user[:username])
+        redirect url_for('/admin/users')
+      rescue UserStore::Error => e
+        halt 409, e.message
       end
 
       get '/favicon.ico' do
@@ -123,6 +277,7 @@ module Oxidized
       end
 
       post '/reload.?:format?' do
+        require_administrator!
         reload_inventory_safely!
         audit_admin!('reload_inventory', '-')
         @data = 'reloaded list of nodes'
@@ -144,6 +299,7 @@ module Oxidized
       end
 
       post '/admin/devices/bulk.?:format?' do
+        require_administrator!
         names = Array(params['devices']).map(&:to_s).uniq
         raise DeviceInventory::Error, 'Select at least one device.' if names.empty?
 
@@ -203,6 +359,7 @@ module Oxidized
       end
 
       get '/admin/devices/:name/edit' do
+        require_administrator!
         @inventory = DeviceInventory.new(nodes, Oxidized.config)
         @device_fields = @inventory.fields
         @models = available_models
@@ -212,6 +369,7 @@ module Oxidized
       end
 
       post '/admin/devices.?:format?' do
+        require_administrator!
         @inventory = DeviceInventory.new(nodes, Oxidized.config)
         attributes = device_attributes(params)
         validate_model!(attributes[:model])
@@ -226,6 +384,7 @@ module Oxidized
       end
 
       post '/admin/devices/:name.?:format?' do
+        require_administrator!
         @inventory = DeviceInventory.new(nodes, Oxidized.config)
         attributes = device_attributes(params, include_name: false)
         attributes[:name] = params['new_name'] if params.has_key?('new_name')
@@ -242,6 +401,7 @@ module Oxidized
       end
 
       post '/admin/devices/:name/delete.?:format?' do
+        require_administrator!
         inventory = DeviceInventory.new(nodes, Oxidized.config)
         inventory.delete(params[:name]) { reload_inventory_safely!(removed: params[:name]) }
         audit_admin!('delete', params[:name])
@@ -274,6 +434,7 @@ module Oxidized
       # .json is optional. If given, will return 'ok'
       # if not, it redirects to /nodes
       post '/node/next/?*?/:node' do
+        require_administrator!
         node, @json = route_parse :node
         nodes.next node
         audit_admin!('backup', node)
@@ -284,6 +445,7 @@ module Oxidized
 
       # use this to attach author/email/message to commit
       put '/node/next/?*?/:node' do
+        require_administrator!
         node, @json = route_parse :node
         opt = JSON.parse request.body.read
         nodes.next node, opt
@@ -426,17 +588,122 @@ module Oxidized
         settings.nodes
       end
 
-      def admin_configuration
-        settings.configuration if settings.respond_to?(:configuration)
+      def auth_store
+        settings.auth_store
       end
 
-      def administrator_credentials_configured?
-        config = admin_configuration || {}
-        !config[:admin_username].to_s.empty? && !config[:admin_password].to_s.empty?
+      def public_auth_path?
+        %w[/login /favicon.ico].include?(request.path_info) || static_asset_path?
+      end
+
+      def static_asset_path?
+        request.path_info.match?(%r{\A/(?:css|scripts|images|weblibs)/[a-zA-Z0-9_./-]+\z}) &&
+          request.path_info.index('..').nil?
+      end
+
+      def api_request?
+        request.path_info.start_with?('/node/fetch/') || request.path_info.end_with?('.json', '.csv') ||
+          %w[json text].include?(params['format']) || request.accept.any? { |type| type.to_s == 'application/json' }
+      end
+
+      def enforce_https!
+        return unless settings.auth_require_https
+        return if request.env['rack.url_scheme'] == 'https' || request.env['HTTPS'] == 'on'
+        return if trusted_proxy_request? && request.env['HTTP_X_FORWARDED_PROTO'].to_s.split(',').first.to_s.strip.casecmp('https').zero?
+
+        halt 403, 'Oxidized Web requires HTTPS. Open the service through its configured HTTPS reverse proxy.'
+      end
+
+      def trusted_proxy_request?
+        trusted_ip?(IPAddr.new(request.env['REMOTE_ADDR'].to_s))
+      rescue IPAddr::InvalidAddressError
+        false
+      end
+
+      def client_ip_address
+        remote = IPAddr.new(request.env['REMOTE_ADDR'].to_s)
+        return remote.to_s unless trusted_ip?(remote)
+
+        forwarded = request.env['HTTP_X_FORWARDED_FOR'].to_s
+        return remote.to_s if forwarded.empty?
+
+        chain = forwarded.split(',').map { |address| IPAddr.new(address.strip) }
+        return remote.to_s if chain.empty? || chain.length > 20
+
+        chain << remote
+        client = chain.pop
+        while trusted_ip?(client)
+          client = chain.pop
+          return remote.to_s unless client
+        end
+        client.to_s
+      rescue IPAddr::InvalidAddressError
+        remote&.to_s || request.env['REMOTE_ADDR'].to_s
+      end
+
+      def trusted_ip?(address)
+        Array(settings.trusted_proxies).any? { |proxy| IPAddr.new(proxy).include?(address) }
+      end
+
+      def prepare_login_session!
+        token = request.cookies['oxidized_web_session']
+        session = auth_store.find_session(token)
+        @remembered_username = request.cookies['oxidized_web_username'].to_s
+        if session.nil? && request.request_method == 'GET'
+          issued = auth_store.create_session
+          issue_session_cookie(issued[:id])
+          session = { csrf_token: issued[:csrf_token], user: nil }
+        end
+        @csrf_token = session && session[:csrf_token]
+        @current_user = session && session[:user]
+        return unless request.request_method == 'POST'
+
+        verify_csrf!(session)
+        verify_admin_origin!
+      end
+
+      def verify_csrf!(session = nil)
+        session ||= { csrf_token: @csrf_token }
+        expected = session && session[:csrf_token].to_s
+        provided = params['csrf_token'].to_s
+        provided = request.env['HTTP_X_CSRF_TOKEN'].to_s if provided.empty?
+        halt 403, 'The security token is missing or expired. Reload the page and try again.' if expected.empty? || provided.empty?
+        halt 403, 'The security token is invalid. Reload the page and try again.' unless secure_compare(expected, provided)
+      end
+
+      def issue_session_cookie(token)
+        response.set_cookie('oxidized_web_session', value: token, path: '/', httponly: true,
+                                                    secure: settings.auth_require_https, same_site: :lax)
+      end
+
+      def clear_session_cookie
+        response.set_cookie('oxidized_web_session', value: '', path: '/', httponly: true,
+                                                    secure: settings.auth_require_https, same_site: :lax, max_age: 0)
+      end
+
+      def set_cookie(name, value, **options)
+        response.set_cookie(name, { value: value, path: '/', secure: settings.auth_require_https,
+                                    same_site: :lax }.merge(options))
+      end
+
+      def safe_return_path(value)
+        path = value.to_s
+        return nil unless path.start_with?('/') && !path.start_with?('//') && !path.match?(/[\r\n\\]/)
+
+        path
+      end
+
+      def require_administrator!
+        halt 403, 'Administrator role required.' unless @current_user && @current_user[:role] == :administrator
+      end
+
+      def audit_user!(action, target)
+        auth_store.record_audit(@current_user[:id], action, target)
+        logger.info("admin_audit action=#{action} user_id=#{@current_user[:id]} target=#{target.to_s.gsub(/[\r\n]/, '_')}")
       end
 
       def inventory_management_unavailable_reason
-        return 'Administrator credentials are not configured. Set OXIDIZED_WEB_ADMIN_USERNAME and OXIDIZED_WEB_ADMIN_PASSWORD in the service environment.' unless administrator_credentials_configured?
+        return 'Administrator role is required for inventory changes.' unless @current_user && @current_user[:role] == :administrator
 
         DeviceInventory.new(nodes, Oxidized.config)
         supports_history_safe_reload? ? nil : 'Inventory writes require a Core version with history-preserving inventory reload support.'
@@ -451,51 +718,6 @@ module Oxidized
         nodes.method(:load).parameters.any? do |kind, name|
           (%i[key keyreq].include?(kind) && name == :clean_obsolete) || kind == :keyrest
         end
-      end
-
-      def authenticate_admin!
-        config = admin_configuration || {}
-        username = config[:admin_username].to_s
-        password = config[:admin_password].to_s
-        halt 503, 'Device administration is disabled. Configure OXIDIZED_WEB_ADMIN_USERNAME and OXIDIZED_WEB_ADMIN_PASSWORD in the Oxidized service environment; writes also require HTTPS and a writable supported CSV source.' if username.empty? || password.empty?
-
-        header = request.env['HTTP_AUTHORIZATION'].to_s
-        encoded = header[/\ABasic\s+(.+)\z/i, 1]
-        provided_user = nil
-        provided_password = nil
-        if encoded
-          decoded = Base64.strict_decode64(encoded)
-          provided_user, provided_password = decoded.split(':', 2)
-        end
-
-        valid_user = secure_compare(provided_user.to_s, username)
-        valid_password = secure_compare(provided_password.to_s, password)
-        return if valid_user && valid_password
-
-        halt 401, { 'WWW-Authenticate' => 'Basic realm="Oxidized administration", charset="UTF-8"' }, 'Administrator authentication required.'
-      rescue ArgumentError
-        halt 401, { 'WWW-Authenticate' => 'Basic realm="Oxidized administration", charset="UTF-8"' }, 'Administrator authentication required.'
-      end
-
-      def authenticate_management_user!
-        config = admin_configuration || {}
-        admin_ready = !config[:admin_username].to_s.empty? && !config[:admin_password].to_s.empty?
-        viewer_ready = !config[:viewer_username].to_s.empty? && !config[:viewer_password].to_s.empty?
-        halt 503, 'Device administration is disabled. Configure OXIDIZED_WEB_ADMIN_USERNAME and OXIDIZED_WEB_ADMIN_PASSWORD in the Oxidized service environment; writes also require HTTPS and a writable supported CSV source.' unless admin_ready
-
-        encoded = request.env['HTTP_AUTHORIZATION'].to_s[/\ABasic\s+(.+)\z/i, 1]
-        decoded = Base64.strict_decode64(encoded.to_s)
-        username, password = decoded.split(':', 2)
-        admin = secure_compare(username.to_s, config[:admin_username].to_s) &&
-                secure_compare(password.to_s, config[:admin_password].to_s)
-        viewer = viewer_ready && secure_compare(username.to_s, config[:viewer_username].to_s) &&
-                 secure_compare(password.to_s, config[:viewer_password].to_s)
-        return :admin if admin
-        return :viewer if viewer
-
-        halt 401, { 'WWW-Authenticate' => 'Basic realm="Oxidized administration", charset="UTF-8"' }, 'Device management authentication required.'
-      rescue ArgumentError
-        halt 401, { 'WWW-Authenticate' => 'Basic realm="Oxidized administration", charset="UTF-8"' }, 'Device management authentication required.'
       end
 
       def secure_compare(left, right)
@@ -646,10 +868,8 @@ module Oxidized
       end
 
       def audit_admin!(action, name)
-        config = admin_configuration || {}
-        username = config[:admin_username].to_s.gsub(/[\r\n]/, '_')
         device = name.to_s.gsub(/[\r\n]/, '_')
-        logger.info("admin_audit action=#{action} admin=#{username} device=#{device}")
+        audit_user!(action, device)
       end
 
       # checks if param ends with .json

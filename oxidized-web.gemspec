@@ -13,7 +13,7 @@ Gem::Specification.new do |s|
   s.summary           = 'sinatra API + webUI for oxidized'
   s.description       = 'puma+sinatra+haml webUI + REST API for oxidized'
   s.files             = %x(git ls-files -z).split("\x0")
-  s.executables       = %w[]
+  s.executables       = %w[oxidized-web-user]
   s.require_path      = 'lib'
 
   s.metadata['rubygems_mfa_required'] = 'true'
@@ -46,6 +46,7 @@ Gem::Specification.new do |s|
   s.add_dependency 'puma',                '>= 6.6', '< 8'
   s.add_dependency 'sinatra',             '~> 4.1'
   s.add_dependency 'sinatra-contrib',     '~> 4.1'
+  s.add_dependency 'sqlite3',             '~> 1.7'
 
   s.add_development_dependency 'minitest',             '>= 5.18', '<7'
   s.add_development_dependency 'mocha',                '>= 2.1', '<4'

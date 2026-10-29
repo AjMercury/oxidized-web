@@ -1,0 +1,59 @@
+!!! 5
+%html{lang: 'en'}
+  %head
+    %meta{charset: 'utf-8'}
+    %meta{name: 'viewport', content: 'width=device-width, initial-scale=1'}
+    %meta{name: 'color-scheme', content: 'light dark'}
+    %title Sign in · Oxidized Web
+    %link{rel: 'shortcut icon', href: url_for('/images/favicon.ico')}
+    %link{rel: 'stylesheet', href: url_for('/weblibs/bootstrap.css')}
+    %link{rel: 'stylesheet', href: url_for('/weblibs/bootstrap-icons.css')}
+    %link{rel: 'stylesheet', href: url_for('/css/oxidized.css')}
+    %script{src: url_for('/scripts/theme-toggle.js'), defer: true}
+    %script{src: url_for('/scripts/login.js'), defer: true}
+  %body.login-page
+    %main.login-shell
+      %section.login-card{:'aria-labelledby' => 'login-title'}
+        .login-brand
+          %img{src: url_for('/images/oxidizing_40px.png'), width: 40, height: 40, alt: ''}
+          %span
+            %strong Oxidized
+            %small Network configuration management
+        .login-heading
+          %span.eyebrow Secure workspace
+          %h1#login-title Sign in
+          %p Continue to your network operations dashboard.
+        - if @login_error
+          .alert.alert-danger{role: 'alert', :'aria-live' => 'assertive'}= @login_error
+        - if auth_store.user_count.zero?
+          .alert.alert-info{role: 'status'}
+            No accounts exist yet. Create the first administrator from the Oxidized host:
+            %code oxidized-web-user bootstrap-admin
+        %form#loginForm{action: url_for('/login'), method: 'post', autocomplete: 'on'}
+          %input{type: 'hidden', name: 'csrf_token', value: @csrf_token}
+          %input{type: 'hidden', name: 'return_to', value: @return_to}
+          .mb-3
+            %label.form-label{for: 'username'} Username
+            %input#username.form-control{name: 'username', type: 'text', value: @remembered_username,
+                                          autocomplete: 'username', required: true, autofocus: true,
+                                          maxlength: 64, pattern: '[A-Za-z0-9._-]{3,64}'}
+          .mb-3
+            %label.form-label{for: 'password'} Password
+            .password-field
+              %input#password.form-control{name: 'password', type: 'password', autocomplete: 'current-password',
+                                            required: true, maxlength: 1024}
+              %button#togglePassword.password-toggle{type: 'button', :'aria-label' => 'Show password', :'aria-pressed' => 'false'}
+                %i.bi.bi-eye{:'aria-hidden' => 'true'}
+          .login-options
+            %label.form-check-label
+              %input.form-check-input{name: 'remember_username', type: 'checkbox', value: '1',
+                                      checked: !@remembered_username.empty?}
+              Remember username
+            %button.login-theme-toggle#theme-toggle{type: 'button', :'aria-label' => 'Switch theme'}
+              %i.bi.bi-moon-stars{:'aria-hidden' => 'true'}
+          %button.btn.btn-primary.login-submit#loginSubmit{type: 'submit', disabled: auth_store.user_count.zero?}
+            %span.button-label Sign in
+            %span.button-spinner{:'aria-hidden' => 'true'}
+        %p.login-security
+          %i.bi.bi-shield-lock{:'aria-hidden' => 'true'}
+          Protected with encrypted transport and server-managed sessions.

@@ -17,8 +17,12 @@ module Oxidized
       def initialize(nodes, configuration)
         require 'oxidized/web/webapp'
         @configuration = self.class.parse_configuration(configuration)
+        auth_configuration = self.class.auth_configuration
         WebApp.set :nodes, nodes
         WebApp.set :configuration, @configuration
+        WebApp.set :auth_store, UserStore.new(auth_configuration[:auth_db_path])
+        WebApp.set :auth_require_https, auth_configuration[:auth_require_https]
+        WebApp.set :trusted_proxies, auth_configuration[:trusted_proxies]
         WebApp.set :host_authorization, {
           permitted_hosts: @configuration[:vhosts]
         }
@@ -57,12 +61,6 @@ module Oxidized
           hide_node_vars = []
         end
         hide_node_vars = hide_node_vars.map(&:to_sym)
-        admin_configuration = {
-          admin_username: ENV.fetch('OXIDIZED_WEB_ADMIN_USERNAME', nil),
-          admin_password: ENV.fetch('OXIDIZED_WEB_ADMIN_PASSWORD', nil),
-          viewer_username: ENV.fetch('OXIDIZED_WEB_VIEWER_USERNAME', nil),
-          viewer_password: ENV.fetch('OXIDIZED_WEB_VIEWER_PASSWORD', nil)
-        }.compact
         {
           addr: configuration.listen? || DEFAULT_HOST,
           port: configuration.port? || DEFAULT_PORT,
@@ -70,7 +68,7 @@ module Oxidized
                                     DEFAULT_URI_PREFIX),
           vhosts: configuration.vhosts? || [],
           hide_node_vars: hide_node_vars
-        }.merge(admin_configuration)
+        }
       end
 
       # Legacy configuration style: "rest: 127.0.0.1:8888/prefix"
@@ -81,19 +79,21 @@ module Oxidized
           port = addr
           addr = nil
         end
-        admin_configuration = {
-          admin_username: ENV.fetch('OXIDIZED_WEB_ADMIN_USERNAME', nil),
-          admin_password: ENV.fetch('OXIDIZED_WEB_ADMIN_PASSWORD', nil),
-          viewer_username: ENV.fetch('OXIDIZED_WEB_VIEWER_USERNAME', nil),
-          viewer_password: ENV.fetch('OXIDIZED_WEB_VIEWER_PASSWORD', nil)
-        }.compact
         {
           addr: addr,
           port: port.to_i,
           uri_prefix: normalize_uri(uri_prefix || DEFAULT_URI_PREFIX),
           vhosts: [],
           hide_node_vars: []
-        }.merge(admin_configuration)
+        }
+      end
+
+      def self.auth_configuration
+        {
+          auth_db_path: UserStore.default_path,
+          auth_require_https: ENV.fetch('OXIDIZED_WEB_AUTH_REQUIRE_HTTPS', 'true').strip.downcase !~ /\A(?:0|false|no)\z/,
+          trusted_proxies: ENV.fetch('OXIDIZED_WEB_TRUSTED_PROXIES', '127.0.0.1,::1').split(',').map(&:strip).reject(&:empty?)
+        }
       end
 
       def self.normalize_uri(uri_prefix)

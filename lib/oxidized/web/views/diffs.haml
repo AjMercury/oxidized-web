@@ -47,6 +47,7 @@
   - params = "node=#{@info[:node]}&group=#{@info[:group]}&oid=#{@info[:oid]}"
   - params = "#{params}&epoch=#{@info[:time].to_i}&num=#{@info[:num]}"
   %form.diff-select-form{action: url_for("/node/version/diffs?#{params}"), method: 'post', role: 'form'}
+    %input{type: 'hidden', name: 'csrf_token', value: @csrf_token}
     %label.visually-hidden{for: 'oid2'} Previous configuration version
     %select.form-select#oid2{name: 'oid2'}
       - diff2 = {}

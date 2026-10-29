@@ -5,7 +5,7 @@ describe Oxidized::API::WebApp do
   include Rack::Test::Methods
 
   def app
-    Oxidized::API::WebApp
+    AuthenticatedWebTestGateway
   end
 
   before do
@@ -20,6 +20,7 @@ describe Oxidized::API::WebApp do
     )
     app.set(:nodes, @nodes)
     app.set(:configuration, { hide_node_vars: [] })
+    AuthenticatedWebTestGateway.prepare
   end
 
   describe '/nodes.?:format?' do

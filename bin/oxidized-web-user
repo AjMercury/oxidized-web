@@ -1,0 +1,37 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require 'io/console'
+require 'optparse'
+require 'oxidized/web/user_store'
+
+options = { db: Oxidized::API::UserStore.default_path }
+parser = OptionParser.new do |opts|
+  opts.banner = 'Usage: oxidized-web-user bootstrap-admin [--db PATH]'
+  opts.on('--db PATH', 'Authentication SQLite database path') { |path| options[:db] = path }
+end
+command = ARGV.shift
+parser.parse!(ARGV)
+abort(parser.to_s) unless command == 'bootstrap-admin' && ARGV.empty?
+
+print 'Administrator username: '
+username = $stdin.gets&.chomp
+$stdout.print 'Administrator password (12+ characters): '
+password = $stdin.noecho(&:gets)&.chomp
+$stdout.puts
+$stdout.print 'Confirm password: '
+confirmation = $stdin.noecho(&:gets)&.chomp
+$stdout.puts
+abort('Passwords do not match.') unless password == confirmation
+
+begin
+  store = Oxidized::API::UserStore.new(options[:db])
+  store.create_initial_admin(username, password)
+  puts "Created the first administrator in #{File.expand_path(options[:db])}."
+rescue Oxidized::API::UserStore::Error => e
+  warn e.message
+  exit 1
+rescue SQLite3::Exception => e
+  warn "Authentication database operation failed (#{e.class})."
+  exit 1
+end

@@ -4,11 +4,12 @@ describe Oxidized::API::WebApp do
   include Rack::Test::Methods
 
   def app
-    Oxidized::API::WebApp
+    AuthenticatedWebTestGateway
   end
 
   describe '/' do
     it 'should redirect to /nodes' do
+      AuthenticatedWebTestGateway.prepare
       get '/'
 
       _(last_response.redirect?).must_equal true

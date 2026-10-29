@@ -34,6 +34,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-10-29
+
+### Added
+- Add a responsive session login page, SQLite-backed account management, administrator/viewer roles, password changes, and a secure first-administrator bootstrap command.
+- Protect dashboard pages, configuration/history views, downloads, and REST endpoints behind server-side sessions; add CSRF checks, secure cookie attributes, HTTPS enforcement, trusted-proxy handling, persistent login throttling, and authentication audit events.
+
+### Changed
+- Replace environment-based HTTP Basic management authentication with local user accounts; all dashboard and API access now requires login, and Basic credentials are ignored.
+- Rate-limit failed sign-ins by resolved client address and username without a proxy-wide lockout bucket; the Nginx example overwrites forwarded client addresses.
+- Add SQLite as a runtime dependency and document authentication setup, roles, reverse proxy configuration, and rollback.
+
+### Fixed
+- Close unauthenticated access to configuration and inventory APIs, including direct URL access.
+- Prevent malformed forwarded-address headers from creating a shared reverse-proxy lockout across different users.
+- Add regression coverage for login/logout, session rotation/expiry, role checks, CSRF, HTTPS proxy validation, Basic-auth rejection, brute-force limits, disabled accounts, password changes, and secret redaction.
+- Fix the JavaScript test DOM fixture so application-shell tests can run with the counter initializer.
+
+### Compatibility
+- Compatibility target: Oxidized Core 0.37.2 and Oxidized Web 0.22.0. Core remains unchanged in this release.
+- Web suite against the local Core 0.37.2 checkout: 116 runs, 559 assertions, 0 failures/errors, 4 Windows-only skips. JavaScript suite: 11/11. Full Web RuboCop: 23 files, no offenses. Linux and browser E2E validation were not available in this environment.
+
 ## [0.21.0] - 2026-10-29
 
 ### Added

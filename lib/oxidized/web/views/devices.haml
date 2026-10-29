@@ -19,6 +19,7 @@
 - if @current_admin != :viewer
   .table-card.device-form-card
     %form{action: url_for('/admin/devices'), method: 'post', autocomplete: 'off'}
+      %input{type: 'hidden', name: 'csrf_token', value: @csrf_token}
       .device-form-grid
         - [['name', 'Hostname', 'router-01.example.net'], ['ip', 'Management IP / FQDN', '192.0.2.10'], ['group', 'Device group', 'branch'], ['username', 'Username', 'oxidized']].each do |field, label, placeholder|
           - if @device_fields.include?(field)
@@ -72,6 +73,7 @@
         %option{value: model}= model
     - if @current_admin != :viewer
       %form#bulkDevices{action: url_for('/admin/devices/bulk'), method: 'post', onsubmit: "var op = document.getElementById('bulkOperation').value; return op === 'delete' ? confirm('Delete all selected devices from the configured inventory?') : (op === 'backup' ? confirm('Queue backups for all selected devices?') : true)"}
+        %input{type: 'hidden', name: 'csrf_token', value: @csrf_token}
         %label.visually-hidden{for: 'bulkOperation'} Bulk operation
         %select.form-select.form-select-sm#bulkOperation{name: 'operation', style: 'max-width: 190px'}
           %option{value: 'backup'} Queue backups
@@ -124,9 +126,11 @@
                 %a.action-link{title: 'Edit device', :'aria-label' => "Edit #{node[:name]}", href: url_for("/admin/devices/#{node[:name]}/edit")}
                   %i.bi.bi-pencil-square{:'aria-hidden' => 'true'}
                 %form.inline-action{action: url_for("/node/next/#{node[:full_name]}"), method: 'post'}
+                  %input{type: 'hidden', name: 'csrf_token', value: @csrf_token}
                   %button.action-link{title: 'Run configuration backup', :'aria-label' => "Run backup for #{node[:name]}", type: 'submit'}
                     %i.bi.bi-arrow-repeat{:'aria-hidden' => 'true'}
                 %form.inline-action{action: url_for("/admin/devices/#{node[:name]}/delete"), method: 'post', onsubmit: "return confirm('Delete this device from the configured inventory?')"}
+                  %input{type: 'hidden', name: 'csrf_token', value: @csrf_token}
                   %button.action-link.text-danger{title: 'Delete device', :'aria-label' => "Delete #{node[:name]}", type: 'submit'}
                     %i.bi.bi-trash{:'aria-hidden' => 'true'}
         - if @data.empty?

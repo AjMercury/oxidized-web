@@ -53,6 +53,7 @@ function setup() {
     addEventListener: (name, listener) => { documentListeners[name] = listener; },
     getElementById: (id) => ({ 'sidebar-toggle': toggle, 'app-sidebar': sidebar,
       'global-config-search': search }[id] || null),
+    querySelectorAll: () => [],
     querySelector: () => ({ href: '#global-config-search', ...link })
   };
   const windowListeners = {};

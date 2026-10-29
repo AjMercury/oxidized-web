@@ -48,22 +48,23 @@ resolves the intended Core version with `bundle exec ruby -e 'require "oxidized"
 4. Confirm the Git output repository path and `output.clean_obsolete_nodes`
    configuration. The Web refresh opts out of cleanup; scheduled Core behavior
    remains unchanged.
-5. Configure `OXIDIZED_WEB_ADMIN_USERNAME` and
-   `OXIDIZED_WEB_ADMIN_PASSWORD` through a root-owned mode-0600 systemd
-   environment file. Systemd reads it before starting the service account. Put
-   the Web endpoint behind HTTPS and set `vhosts` to the expected host.
-   For inventory read-only access, optionally configure
-   `OXIDIZED_WEB_VIEWER_USERNAME` and `OXIDIZED_WEB_VIEWER_PASSWORD` in the
-   same protected file. Viewer credentials cannot mutate inventory or queue
-   backups; administrator credentials are still required for all writes.
+5. Configure the SQLite database path and trusted local reverse proxy in a
+   root-owned systemd environment file. Systemd reads it before switching to
+   the service account. Preserve the public Host header, replace
+   `X-Forwarded-Proto` at the proxy, and set `vhosts` to the expected host.
+   See [AUTHENTICATION.md](AUTHENTICATION.md) for the Nginx/Caddy requirements.
+6. Create the first administrator with the new `oxidized-web-user`
+   executable. Do not put the administrator password in command arguments or
+   systemd environment variables.
 
 ## Back up before installation
 
 Stop writes through the maintenance window. As the operator, copy the current
 Web gem, Core gem if it is being upgraded, Oxidized YAML/systemd configuration,
-CSV source, and Git output repository to a protected backup location. Preserve
-owner, group, mode, and timestamps. Do not back up credentials into an
-unprotected directory.
+authentication SQLite database, CSV source, and Git output repository to a
+protected backup location. Preserve owner, group, mode, and timestamps. Keep
+the SQLite database mode at `0600` and do not copy it into an unprotected
+directory.
 
 After scheduling an approved maintenance window, stop Oxidized before taking a
 consistent copy. Example (replace paths with the locally verified values):
@@ -73,6 +74,9 @@ sudo systemctl stop oxidized.service
 sudo install -d -m 0700 /var/backups/oxidized-pre-enterprise
 sudo cp -a /etc/oxidized/config /etc/oxidized/router.db /var/backups/oxidized-pre-enterprise/
 sudo cp -a /var/lib/oxidized/oxidized.git /var/backups/oxidized-pre-enterprise/
+if sudo test -f /var/lib/oxidized/web-auth.sqlite3; then
+  sudo cp -a /var/lib/oxidized/web-auth.sqlite3 /var/backups/oxidized-pre-enterprise/
+fi
 sudo systemctl cat oxidized.service | sudo tee /var/backups/oxidized-pre-enterprise/oxidized.service.txt >/dev/null
 ```
 
@@ -83,14 +87,20 @@ the same RubyGems environment as `/usr/local/bin/oxidized`:
 
 ```sh
 sudo gem install --local ./oxidized-0.37.2.gem
-sudo gem install --local ./oxidized-web-0.21.0.gem
+sudo gem install --local ./oxidized-web-0.22.0.gem
+sudo install -o oxidized -g oxidized -m 0700 -d /var/lib/oxidized
+sudo -u oxidized env OXIDIZED_WEB_AUTH_DB=/var/lib/oxidized/web-auth.sqlite3 \
+  /usr/local/bin/oxidized-web-user bootstrap-admin
 sudo systemctl daemon-reload
 sudo systemctl restart oxidized.service
 ```
 
-If an updated Core gem is not approved or installed, keep administrator
-operations disabled. The existing UI read APIs continue to use the configured
-Core installation.
+The bootstrap command prompts for a username and password twice, requires at
+least 12 password characters, and creates no default credentials. Configure
+the same `OXIDIZED_WEB_AUTH_DB` path in the systemd environment before starting
+the service. If Core 0.37.2 is not approved or installed, the existing UI reads
+continue to use the installed Core; inventory management remains guarded by its
+history-preserving Core API check.
 
 ## Health and post-deployment verification
 
@@ -98,15 +108,20 @@ Core installation.
 sudo systemctl is-active oxidized.service
 sudo systemctl status oxidized.service --no-pager
 sudo journalctl -u oxidized.service -n 100 --no-pager
-curl --fail --silent --show-error http://127.0.0.1:8888/nodes.json
+curl --fail --silent --show-error https://oxidized.example.com/login
+curl --silent --show-error --output /dev/null --write-out '%{http_code}\n' \
+  https://oxidized.example.com/nodes.json
 ```
 
-Through the HTTPS reverse proxy, verify unauthenticated admin access is
-rejected, configured admin access can open Device Management, and a synthetic
-isolated inventory can be created, reloaded, and removed. Verify credentials
-are absent from browser/API responses and logs. Confirm the device status after
-Core processes a manual backup. Do not use a production network device for the
-acceptance test.
+Through the HTTPS reverse proxy, verify the login page returns `200`, the root
+redirects to Login, an unauthenticated `/nodes.json` request returns `401`,
+Basic Authorization does not grant access, and a configured administrator
+can open Device Management. The direct local HTTP listener is not a valid
+health endpoint when HTTPS enforcement is enabled.
+Verify a viewer cannot write, CSRF-less requests fail, and logout invalidates
+the session. Use an isolated synthetic inventory for any add/reload/remove
+check. Verify credentials are absent from browser/API responses and logs. Do
+not use a production network device for acceptance testing.
 
 ## Rollback
 
@@ -114,8 +129,8 @@ If the service fails health checks, restore the previously installed gem
 versions and saved files from the protected backup, then restart:
 
 ```sh
-sudo gem uninstall oxidized-web --version 0.21.0 --ignore-dependencies
-sudo gem install --local ./oxidized-web-0.20.0.gem
+sudo gem uninstall oxidized-web --version 0.22.0 --ignore-dependencies
+sudo gem install --local ./oxidized-web-0.21.0.gem
 sudo systemctl daemon-reload
 sudo systemctl restart oxidized.service
 sudo systemctl is-active oxidized.service
@@ -130,8 +145,8 @@ When the saved gems are available in the working directory, the exact package
 rollback is:
 
 ```sh
-sudo gem uninstall oxidized-web --version 0.21.0 --ignore-dependencies
-sudo gem install --local ./oxidized-web-0.20.0.gem
+sudo gem uninstall oxidized-web --version 0.22.0 --ignore-dependencies
+sudo gem install --local ./oxidized-web-0.21.0.gem
 sudo gem uninstall oxidized --version 0.37.2 --ignore-dependencies
 sudo gem install --local ./oxidized-0.37.1.gem
 sudo systemctl daemon-reload
@@ -150,6 +165,8 @@ sudo cp -a /var/backups/oxidized-pre-enterprise/oxidized.git /var/lib/oxidized/
 sudo systemctl restart oxidized.service
 ```
 
-The history-preserving reload does not delete historical configs. Keep the new
-Web gem's administrator and viewer environment variables unset or remove them
-during rollback if the previous Web version has no administrator authorization.
+The history-preserving reload does not delete historical configs. Web 0.21.0
+uses the previous environment-based management credentials; restore those
+protected settings only if the operator intentionally rolls back to that Web
+version. Keep the SQLite authentication database backed up; do not delete it
+when rolling back, because it contains the local users and audit history.

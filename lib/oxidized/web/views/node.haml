@@ -25,10 +25,12 @@
         %i.bi.bi-pencil-square{:'aria-hidden' => 'true'}
         Edit
       %form.inline-action{action: url_for("/node/next/#{@device_full_name}"), method: 'post'}
+        %input{type: 'hidden', name: 'csrf_token', value: @csrf_token}
         %button.btn.btn-primary{type: 'submit'}
           %i.bi.bi-arrow-repeat{:'aria-hidden' => 'true'}
           Backup Now
       %form.inline-action{action: url_for("/admin/devices/#{@data[:name]}/delete"), method: 'post', onsubmit: "return confirm('Delete this device from the configured inventory? Git backup history will be retained.')"}
+        %input{type: 'hidden', name: 'csrf_token', value: @csrf_token}
         %button.btn.btn-outline-danger{type: 'submit'}
           %i.bi.bi-trash{:'aria-hidden' => 'true'}
           Delete

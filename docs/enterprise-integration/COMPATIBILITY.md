@@ -34,6 +34,7 @@ unchanged.
 | 0.37.1 | 0.19.0 | Core focused `spec/nodes_spec.rb` (14/30); Web Minitest (91/385, 2 Windows skips); JavaScript (8/8); changed-file RuboCop | Core safe reload API and Web management routes verified; Web uses a synthetic Core-compatible node source |
 | 0.37.1 | 0.20.0 | JavaScript (9/9); Ruby/Haml, gem build, and Linux checks unavailable in current Windows runtime | Not fully certified; run the documented Ruby suite and gem build on Ubuntu 24.04 before merge |
 | 0.37.2 | 0.21.0 | Web Minitest 94 runs / 415 assertions (2 Windows-only skips); Web changed-file RuboCop clean; Core RouterOS test 3 / 24; Core changed-file RuboCop clean; both gems built; natural-version and IP-sort Node test passed | Windows full Core suite: 453 runs, 17 failures, 9 errors from POSIX signal handling, Windows path normalization, and Git path assumptions. Not Linux-certified; require Ubuntu 24.04 full-suite and browser checks before merge/deployment |
+| 0.37.2 | 0.22.0 | Web Minitest 116 runs / 559 assertions (4 Windows-only skips) against the local Core 0.37.2 checkout; Node tests 11/11; full Web RuboCop clean (23 files); authentication, role, CSRF, trusted proxy, rate-limit, absolute session expiry, audit, and SQLite file/directory permissions | Core unchanged. Windows runtime only; Linux and browser E2E are not certified |
 | 0.34.1 | 0.18.1.1 | Gem lower bound only | Not certified; dependency compatibility is not proof of runtime compatibility |
 
 The repository's full Core suite was attempted on the bundled Windows Ruby:
@@ -56,7 +57,7 @@ merging. No Core/Web version-number equality is assumed.
 - POSIX file owner/mode and multi-process lock tests are skipped on Windows; run the Web suite on Ubuntu 24.04 to execute them.
 - Local Simple Icons SVG marks are provided for Cisco, MikroTik, Juniper, Fortinet, Palo Alto Networks, Huawei, Ubiquiti, and Dell; other vendors use the generic network-device icon. The individual icon entries did not include per-icon license metadata, so the bundled upstream disclaimer and vendor source links are retained. Review each vendor's current logo terms before redistribution or public marketing use.
 - Vendor labels are best-effort guesses based on model names and must not be interpreted as backup support. The installed Core model list remains the create/edit allowlist.
-- Read-only Device Management access can be configured with `OXIDIZED_WEB_VIEWER_USERNAME` and `OXIDIZED_WEB_VIEWER_PASSWORD`; the administrator credentials remain mandatory and are the only role allowed to mutate inventory.
+- All dashboard and API routes require a local SQLite-backed session. Create the first administrator with `oxidized-web-user bootstrap-admin`; administrators manage viewer and administrator accounts in the UI. HTTP Basic credentials and the legacy `OXIDIZED_WEB_ADMIN_*` / `OXIDIZED_WEB_VIEWER_*` settings are not accepted.
 - SSH and Telnet ports are supported only when the CSV maps Core's `ssh_port`
   or `telnet_port` node variables.
 - A colon-delimited source cannot represent an IPv6 address containing colons;

@@ -26,6 +26,10 @@
           %a.sidebar-link{href: url_for('/admin/devices')}
             %i.bi.bi-sliders{:'aria-hidden' => 'true'}
             %span Device management
+          - if @current_user && @current_user[:role] == :administrator
+            %a.sidebar-link{href: url_for('/admin/users')}
+              %i.bi.bi-people{:'aria-hidden' => 'true'}
+              %span User management
           %a.sidebar-link{href: '#global-config-search'}
             %i.bi.bi-search{:'aria-hidden' => 'true'}
             %span Configuration search
@@ -46,11 +50,24 @@
             %span.topbar-title Configuration management
           .topbar-actions
             %form.config-search{role: 'search', action: url_for('/nodes/conf_search'), method: 'post'}
+              %input{type: 'hidden', name: 'csrf_token', value: @csrf_token}
               %label.visually-hidden{for: 'global-config-search'} Search in configurations
               %i.bi.bi-search{:'aria-hidden' => 'true'}
               %input#global-config-search{name: 'search_in_conf_textbox', type: 'search', placeholder: 'Search configurations…'}
             %button.theme-toggle#theme-toggle{type: 'button', :'aria-label' => 'Switch to dark theme', :'aria-pressed' => 'false'}
               %i.bi.bi-moon-stars{:'aria-hidden' => 'true'}
+            %details.user-menu
+              %summary{:'aria-label' => "Account menu for #{@current_user[:username]}"}
+                %i.bi.bi-person-circle{:'aria-hidden' => 'true'}
+                = @current_user[:username]
+                %i.bi.bi-chevron-down{:'aria-hidden' => 'true'}
+              .user-menu-panel
+                %a{href: url_for('/profile')} My profile / change password
+                - if @current_user[:role] == :administrator
+                  %a{href: url_for('/admin/users')} User management
+                %form{action: url_for('/logout'), method: 'post'}
+                  %input{type: 'hidden', name: 'csrf_token', value: @csrf_token}
+                  %button{type: 'submit'} Sign out
         %main.app-content#main-content
           .page-container
             != yield

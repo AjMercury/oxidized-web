@@ -54,7 +54,7 @@ describe 'administrator device management' do
   include Rack::Test::Methods
 
   def app
-    Oxidized::API::WebApp
+    AuthenticatedWebTestGateway
   end
 
   def admin_headers
@@ -80,6 +80,7 @@ describe 'administrator device management' do
               admin_username: 'admin', admin_password: 'correct-horse',
               viewer_username: 'viewer', viewer_password: 'read-only'
             })
+    AuthenticatedWebTestGateway.prepare
   end
 
   after do
@@ -87,9 +88,11 @@ describe 'administrator device management' do
   end
 
   it 'shows a mapped CSV form and live device inventory only to an authenticated administrator' do
+    AuthenticatedWebTestGateway.clear
     get '/admin/devices'
-    _(last_response.status).must_equal 401
+    _(last_response.status).must_equal 302
 
+    AuthenticatedWebTestGateway.prepare
     get '/admin/devices', {}, admin_headers
 
     _(last_response.ok?).must_equal true
@@ -103,17 +106,16 @@ describe 'administrator device management' do
   end
 
   it 'explains why device management is disabled when administrator credentials are missing' do
-    app.set(:configuration, { hide_node_vars: [], admin_username: nil, admin_password: nil })
-
-    get '/admin/devices'
-
-    _(last_response.status).must_equal 503
-    _(last_response.body).must_include('Administrative actions are disabled')
-    _(last_response.body).must_include('OXIDIZED_WEB_ADMIN_USERNAME')
-    _(last_response.body).must_include('HTTPS reverse proxy')
+    @auth_store = Oxidized::API::UserStore.new(File.join(@directory, 'empty.sqlite3'))
+    app.set(:auth_store, @auth_store)
+    get '/login'
+    _(last_response.ok?).must_equal true
+    _(last_response.body).must_include('No accounts exist yet')
+    _(last_response.body).must_include('oxidized-web-user bootstrap-admin')
   end
 
   it 'allows a configured read-only role to view inventory but denies writes' do
+    AuthenticatedWebTestGateway.as_role(:viewer)
     viewer_headers = { 'HTTP_AUTHORIZATION' => "Basic #{Base64.strict_encode64('viewer:read-only')}" }
     get '/admin/devices', {}, viewer_headers
     _(last_response.ok?).must_equal true
@@ -121,10 +123,11 @@ describe 'administrator device management' do
     _(last_response.body).wont_include('id="bulkDevices"')
 
     post '/admin/devices.json', { name: 'reader-write', model: 'ios', ip: '192.0.2.3' }, viewer_headers
-    _(last_response.status).must_equal 401
+    _(last_response.status).must_equal 403
   end
 
   it 'protects source reload routes with a format suffix' do
+    AuthenticatedWebTestGateway.clear
     @nodes.expects(:load).never
 
     post '/reload.json'
@@ -225,7 +228,7 @@ describe 'administrator device management' do
     _(last_response.status).must_equal 403
 
     post '/admin/devices.json', { name: 'edge-1', model: 'ios', ip: '192.0.2.1' },
-         'HTTP_AUTHORIZATION' => admin_headers['HTTP_AUTHORIZATION']
+         'HTTP_AUTHORIZATION' => admin_headers['HTTP_AUTHORIZATION'], 'HTTP_ORIGIN' => ''
     _(last_response.status).must_equal 403
   end
 
@@ -234,9 +237,9 @@ describe 'administrator device management' do
     @nodes.expects(:next).never
 
     get '/reload'
-    _(last_response.status).must_equal 401
+    _(last_response.status).must_equal 404
     get '/node/next/edge-1'
-    _(last_response.status).must_equal 401
+    _(last_response.status).must_equal 404
   end
 
   it 'queues bulk backups and deletes selected CSV records in one history-safe reload' do

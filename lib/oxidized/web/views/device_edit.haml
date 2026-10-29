@@ -9,6 +9,7 @@
     %p Update mapped inventory fields for #{@device[:name]}.
 .table-card.device-form-card
   %form{action: url_for("/admin/devices/#{@device[:name]}"), method: 'post', autocomplete: 'off'}
+    %input{type: 'hidden', name: 'csrf_token', value: @csrf_token}
     .device-form-grid
       - [['new_name', 'name', 'Hostname'], ['ip', 'ip', 'Management IP / FQDN'], ['group', 'group', 'Device group'], ['username', 'username', 'Username']].each do |input_name, field, label|
         - if @device_fields.include?(field)
