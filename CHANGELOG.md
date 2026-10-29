@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.25.2] - 2026-10-29
+
+### Fixed
+- Override the legacy 30px icon-button width for labeled Backup Now actions so their text stays inside the button.
+- Keep status badges on one line instead of splitting their labels across table rows.
+
 ## [0.25.1] - 2026-10-29
 
 ### Fixed
