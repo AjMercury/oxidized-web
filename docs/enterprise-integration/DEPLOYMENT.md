@@ -110,8 +110,10 @@ If the service fails health checks, restore the previously installed gem
 versions and saved files from the protected backup, then restart:
 
 ```sh
-sudo gem install --local ./oxidized-web-0.18.1.1.gem
+sudo gem uninstall oxidized-web --version 0.19.0 --ignore-dependencies
+sudo gem uninstall oxidized --version 0.37.1 --executables --ignore-dependencies
 sudo gem install --local ./oxidized-0.37.0.gem
+sudo gem install --local ./oxidized-web-0.18.1.1.gem
 sudo systemctl daemon-reload
 sudo systemctl restart oxidized.service
 sudo systemctl is-active oxidized.service
