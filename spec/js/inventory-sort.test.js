@@ -29,4 +29,6 @@ test('software version comparator sorts numeric components and unknown values de
   assert.equal(order['version-sort-asc']('7.15', '7.24.5') < 0, true);
   assert.equal(order['version-sort-desc']('7.9', '7.15') > 0, true);
   assert.equal(order['version-sort-pre']('Unknown'), '');
+  assert.equal(order['ip-sort-pre']('192.168.1.12') > order['ip-sort-pre']('192.168.1.2'), true);
+  assert.equal(order['ip-sort-pre']('192.168.1.2') < order['ip-sort-pre']('192.168.1.12'), true);
 });

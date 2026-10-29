@@ -24,6 +24,11 @@ module Oxidized
                      request.path_info.start_with?('/admin/devices', '/node/next/')
         if admin_path
           if request.request_method == 'GET'
+            if request.path_info == '/admin/devices' && !administrator_credentials_configured?
+              status 503
+              @admin_disabled_reason = 'Set OXIDIZED_WEB_ADMIN_USERNAME and OXIDIZED_WEB_ADMIN_PASSWORD in the Oxidized service environment. Inventory changes also require HTTPS and a supported writable CSV source.'
+              halt haml(:admin_unavailable, layout: true)
+            end
             @current_admin = authenticate_management_user!
             halt 403, 'This account has read-only inventory access.' if @current_admin == :viewer && request.path_info.end_with?('/edit')
           else
@@ -72,6 +77,7 @@ module Oxidized
       end
 
       get '/nodes.?:format?' do
+        @management_error = inventory_management_unavailable_reason
         @data = nodes.list.map do |node|
           node = filter_node_vars(node)
           node[:status] = 'never'
@@ -287,9 +293,24 @@ module Oxidized
         out
       end
 
-      get '/node/show/:node' do
-        node, @json = route_parse :node
-        @data = filter_node_vars(nodes.show(node))
+      get '/node/show/*' do
+        node_path, @json = route_parse params[:splat].first
+        if node_path.include?('/')
+          @data = nodes.list.find { |candidate| candidate[:full_name].to_s == node_path }
+          halt 404, 'node not found' unless @data
+
+          @data = filter_node_vars(@data)
+          @device_full_name = @data[:full_name]
+        else
+          node_path = route_parse(:node).first if params[:node]
+          @data = filter_node_vars(nodes.show(node_path))
+          @device_full_name = @data[:full_name] || node_path
+        end
+        @device_status = @data.dig(:last, :status) || 'unknown'
+        @device_time = @data.dig(:last, :end) || 'never'
+        @device_mtime = @data[:mtime]
+        @device_revision_count = revision_count_for(@data)
+        @management_error = inventory_management_unavailable_reason
         out :node
       end
 
@@ -369,6 +390,7 @@ module Oxidized
         else
           @data = 'No diff available'
         end
+        @diff_patch = @data
         @diff = diff_view @data
         out :diffs
       end
@@ -408,11 +430,34 @@ module Oxidized
         settings.configuration if settings.respond_to?(:configuration)
       end
 
+      def administrator_credentials_configured?
+        config = admin_configuration || {}
+        !config[:admin_username].to_s.empty? && !config[:admin_password].to_s.empty?
+      end
+
+      def inventory_management_unavailable_reason
+        return 'Administrator credentials are not configured. Set OXIDIZED_WEB_ADMIN_USERNAME and OXIDIZED_WEB_ADMIN_PASSWORD in the service environment.' unless administrator_credentials_configured?
+
+        DeviceInventory.new(nodes, Oxidized.config)
+        supports_history_safe_reload? ? nil : 'Inventory writes require a Core version with history-preserving inventory reload support.'
+      rescue DeviceInventory::Error => e
+        e.message
+      rescue StandardError => e
+        logger.warn("Unable to check device management availability (#{e.class})")
+        'Device management availability could not be verified. Check the Oxidized service configuration.'
+      end
+
+      def supports_history_safe_reload?
+        nodes.method(:load).parameters.any? do |kind, name|
+          (%i[key keyreq].include?(kind) && name == :clean_obsolete) || kind == :keyrest
+        end
+      end
+
       def authenticate_admin!
         config = admin_configuration || {}
         username = config[:admin_username].to_s
         password = config[:admin_password].to_s
-        halt 503, 'Administrator operations are disabled until OXIDIZED_WEB_ADMIN_USERNAME and OXIDIZED_WEB_ADMIN_PASSWORD are configured.' if username.empty? || password.empty?
+        halt 503, 'Device administration is disabled. Configure OXIDIZED_WEB_ADMIN_USERNAME and OXIDIZED_WEB_ADMIN_PASSWORD in the Oxidized service environment; writes also require HTTPS and a writable supported CSV source.' if username.empty? || password.empty?
 
         header = request.env['HTTP_AUTHORIZATION'].to_s
         encoded = header[/\ABasic\s+(.+)\z/i, 1]
@@ -436,7 +481,7 @@ module Oxidized
         config = admin_configuration || {}
         admin_ready = !config[:admin_username].to_s.empty? && !config[:admin_password].to_s.empty?
         viewer_ready = !config[:viewer_username].to_s.empty? && !config[:viewer_password].to_s.empty?
-        halt 503, 'Device management is disabled until administrator credentials are configured.' unless admin_ready
+        halt 503, 'Device administration is disabled. Configure OXIDIZED_WEB_ADMIN_USERNAME and OXIDIZED_WEB_ADMIN_PASSWORD in the Oxidized service environment; writes also require HTTPS and a writable supported CSV source.' unless admin_ready
 
         encoded = request.env['HTTP_AUTHORIZATION'].to_s[/\ABasic\s+(.+)\z/i, 1]
         decoded = Base64.strict_decode64(encoded.to_s)
@@ -463,24 +508,21 @@ module Oxidized
         origin = request.env['HTTP_ORIGIN']
         referer = request.env['HTTP_REFERER']
         value = origin || referer
-        halt 403, 'A same-origin HTTPS request is required.' if value.to_s.empty?
+        halt 403, 'Administrative changes require a same-origin HTTPS request. Open Oxidized Web through its HTTPS reverse-proxy URL.' if value.to_s.empty?
 
         uri = URI.parse(value)
-        halt 403, 'A same-origin HTTPS request is required.' unless uri.scheme == 'https' && uri.host
+        halt 403, 'Administrative changes require a same-origin HTTPS request. Open Oxidized Web through its HTTPS reverse-proxy URL.' unless uri.scheme == 'https' && uri.host
 
         expected_host = request.env['HTTP_HOST'].to_s.downcase
         origin_host = uri.host.downcase
         origin_host += ":#{uri.port}" unless uri.port == uri.default_port
-        halt 403, 'A same-origin HTTPS request is required.' unless origin_host == expected_host
+        halt 403, 'Administrative changes require a same-origin HTTPS request. Open Oxidized Web through its HTTPS reverse-proxy URL.' unless origin_host == expected_host
       rescue URI::InvalidURIError
-        halt 403, 'A same-origin HTTPS request is required.'
+        halt 403, 'Administrative changes require a same-origin HTTPS request. Open Oxidized Web through its HTTPS reverse-proxy URL.'
       end
 
       def reload_inventory_safely!(expected: nil, removed: nil)
-        supports_history_safe_reload = nodes.method(:load).parameters.any? do |kind, name|
-          (%i[key keyreq].include?(kind) && name == :clean_obsolete) || kind == :keyrest
-        end
-        unless supports_history_safe_reload
+        unless supports_history_safe_reload?
           raise DeviceInventory::Error.new(
             'This Oxidized Core version does not support history-preserving inventory reloads. Upgrade Core before changing inventory.',
             status: 409
@@ -540,6 +582,19 @@ module Oxidized
 
       def vendor_logo(model)
         vendor_for_model(model).downcase.gsub(/[^a-z0-9]+/, '-')
+      end
+
+      def vendor_logo_asset(model)
+        {
+          'Cisco' => 'cisco',
+          'MikroTik' => 'mikrotik',
+          'Juniper' => 'junipernetworks',
+          'Fortinet' => 'fortinet',
+          'Palo Alto Networks' => 'paloaltonetworks',
+          'Huawei' => 'huawei',
+          'Ubiquiti' => 'ubiquiti',
+          'Dell' => 'dell'
+        }[vendor_for_model(model)]
       end
 
       def revision_count_for(node)

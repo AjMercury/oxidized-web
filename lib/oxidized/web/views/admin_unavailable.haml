@@ -1,0 +1,16 @@
+.page-heading
+  .page-heading-copy
+    %span.eyebrow.text-muted Device administration
+    %h1 Administrative actions are disabled
+    %p Device inventory changes are unavailable until the server is configured for secure administration.
+
+.notice-card.notice-card-warning{role: 'status'}
+  .notice-icon
+    %i.bi.bi-shield-lock{:'aria-hidden' => 'true'}
+  .notice-copy
+    %strong Server configuration required
+    %p= @admin_disabled_reason
+    %p Configure an HTTPS reverse proxy, administrator credentials in the Oxidized service environment, and a supported writable CSV inventory. This page does not enable or bypass those controls.
+  %a.btn.btn-outline-secondary{href: url_for('/nodes')}
+    %i.bi.bi-arrow-left{:'aria-hidden' => 'true'}
+    Return to inventory

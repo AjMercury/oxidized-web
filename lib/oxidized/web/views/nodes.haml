@@ -8,15 +8,34 @@
 .page-heading
   .page-heading-copy
     %span.eyebrow.text-muted Network overview
-    %h1 Device inventory
-    %p Monitor managed devices and the outcome of their latest configuration backup.
+    %h1 Network operations
+    %p Live inventory health, configuration history, and device actions.
   .page-heading-actions
+    %label.visually-hidden{for: 'refreshInterval'} Automatic refresh interval
+    %select.form-select.form-select-sm#refreshInterval{:'aria-label' => 'Automatic refresh interval'}
+      %option{value: '0'} Auto refresh off
+      %option{value: '30'} Every 30 seconds
+      %option{value: '60'} Every minute
+      %option{value: '300'} Every 5 minutes
     %button.btn.btn-outline-secondary{type: 'button', onclick: 'window.location.reload();'}
       %i.bi.bi-arrow-clockwise{:'aria-hidden' => 'true'}
       Refresh
-    %button.btn.btn-primary#reload{type: 'button'}
+    %button.btn.btn-outline-secondary#reload{type: 'button', disabled: !@management_error.nil?, title: @management_error}
       %i.bi.bi-arrow-repeat{:'aria-hidden' => 'true'}
       Reload source
+    - if @management_error.nil?
+      %a.btn.btn-primary.btn-add-device{href: url_for('/admin/devices')}
+        %i.bi.bi-plus-lg{:'aria-hidden' => 'true'}
+        Add Device
+    - else
+      %a.btn.btn-outline-secondary{href: url_for('/admin/devices'), title: @management_error}
+        %i.bi.bi-shield-exclamation{:'aria-hidden' => 'true'}
+        Admin actions unavailable
+
+- if @management_error
+  .alert.alert-warning.admin-availability{role: 'status', :'aria-live' => 'polite'}
+    %i.bi.bi-shield-lock{:'aria-hidden' => 'true'}
+    %span Administrative actions are disabled: #{@management_error} Open Device Management for setup details.
 
 .alert.d-none#flashMessage{role: 'status', :'aria-live' => 'polite'}
 
@@ -26,28 +45,28 @@
       %span.metric-icon
         %i.bi.bi-hdd-stack{:'aria-hidden' => 'true'}
       %span.metric-caption Total devices
-    %strong.metric-value= total_nodes
+    %strong.metric-value{:'data-counter' => total_nodes}= total_nodes
     %span.metric-note Devices in the current node list
   .metric-card.metric-card-success
     .metric-topline
       %span.metric-icon
         %i.bi.bi-check2-circle{:'aria-hidden' => 'true'}
       %span.metric-caption Latest backup successful
-    %strong.metric-value= successful_nodes
+    %strong.metric-value{:'data-counter' => successful_nodes}= successful_nodes
     %span.metric-note Devices whose most recent run succeeded
   .metric-card.metric-card-danger
     .metric-topline
       %span.metric-icon
         %i.bi.bi-exclamation-circle{:'aria-hidden' => 'true'}
       %span.metric-caption Latest backup failed
-    %strong.metric-value= failed_nodes
+    %strong.metric-value{:'data-counter' => failed_nodes}= failed_nodes
     %span.metric-note Devices whose most recent run failed
   .metric-card.metric-card-muted
     .metric-topline
       %span.metric-icon
         %i.bi.bi-clock-history{:'aria-hidden' => 'true'}
       %span.metric-caption No backup history
-    %strong.metric-value= nodes_without_history
+    %strong.metric-value{:'data-counter' => nodes_without_history}= nodes_without_history
     %span.metric-note Devices with no recorded latest run
 
 .section-heading
@@ -55,13 +74,54 @@
     %h2 Managed devices
     %p Search, filter, inspect configuration history, or trigger a backup.
 
-.vendor-summary{:'aria-label' => 'Devices by vendor'}
-  - vendor_counts.each do |vendor, count|
-    .vendor-summary-item
-      %span.vendor-mark{class: "vendor-#{vendor_logo(vendor)}", :'aria-hidden' => 'true'}
-        %i.bi.bi-hdd-network
-      %span= vendor
-      %strong= count
+.dashboard-grid
+  .chart-card.vendor-chart-card
+    .chart-card-heading
+      %span.chart-icon.chart-icon-cyan
+        %i.bi.bi-pie-chart-fill{:'aria-hidden' => 'true'}
+      .chart-heading-copy
+        %h2 Vendor distribution
+        %p Filter inventory by platform family
+    - max_vendor_count = [vendor_counts.map(&:last).max.to_i, 1].max
+    .vendor-chart-list
+      - vendor_counts.each do |vendor, count|
+        %button.vendor-chart-row{type: 'button', :'data-vendor-filter' => vendor, :'aria-label' => "Filter devices by #{vendor}, #{count} devices"}
+          %span.vendor-mark{class: "vendor-#{vendor_logo(vendor)}", :'aria-hidden' => 'true'}
+            - if vendor_logo_asset(vendor)
+              %img.vendor-logo{src: url_for("/images/vendors/#{vendor_logo_asset(vendor)}.svg"), alt: '', loading: 'lazy'}
+            - else
+              %i.bi.bi-hdd-network
+          %span.vendor-chart-label= vendor
+          %span.vendor-bar-track
+            %span.vendor-bar{style: "width: #{(count.to_f / max_vendor_count * 100).round}%"}
+          %strong.vendor-chart-count= count
+    - if vendor_counts.empty?
+      .empty-state No vendor data is available in the current inventory.
+  .chart-card.health-chart-card
+    .chart-card-heading
+      %span.chart-icon.chart-icon-green
+        %i.bi.bi-heart-pulse-fill{:'aria-hidden' => 'true'}
+      .chart-heading-copy
+        %h2 Backup health
+        %p Latest run status from Core
+    .health-visual
+      .health-ring{style: "--success-share: #{total_nodes.zero? ? 0 : (successful_nodes.to_f / total_nodes * 100).round}%", :'aria-label' => "#{successful_nodes} successful, #{failed_nodes} failed, #{nodes_without_history} never backed up"}
+        .health-ring-inner
+          %strong= total_nodes.zero? ? '—' : "#{(successful_nodes.to_f / total_nodes * 100).round}%"
+          %span success
+      .health-legend
+        .health-legend-row
+          %span.health-dot.health-dot-success
+          %span Successful
+          %strong= successful_nodes
+        .health-legend-row
+          %span.health-dot.health-dot-danger
+          %span Failed
+          %strong= failed_nodes
+        .health-legend-row
+          %span.health-dot.health-dot-muted
+          %span Never backed up
+          %strong= nodes_without_history
 
 .table-card
   .table-toolbar
@@ -111,7 +171,10 @@
             %td.text-muted{:'data-order' => node[:ip]}= node[:ip]
             %td.vendor-cell
               %span.vendor-mark{class: "vendor-#{vendor_logo(node[:model])}", title: vendor_for_model(node[:model])}
-                %i.bi.bi-hdd-network{:'aria-hidden' => 'true'}
+                - if vendor_logo_asset(node[:model])
+                  %img.vendor-logo{src: url_for("/images/vendors/#{vendor_logo_asset(node[:model])}.svg"), alt: '', loading: 'lazy'}
+                - else
+                  %i.bi.bi-hdd-network{:'aria-hidden' => 'true'}
               = vendor_for_model(node[:model])
             %td
               %a.model-link{href: url_for("/nodes/model/#{node[:model]}")}= node[:model]
@@ -124,18 +187,41 @@
             %td.time.text-nowrap{epoch: node[:time] && node[:time] != 'never' ? node[:time].to_i : '', :'data-order' => node[:time] && node[:time] != 'never' ? node[:time].to_i : 0}= node[:time]
             %td.time.text-nowrap{epoch: node[:mtime] ? node[:mtime].to_i : '', :'data-order' => node[:mtime] ? node[:mtime].to_i : 0}= node[:mtime]
             %td.actions-cell
+              %a.btn.btn-sm.btn-action.btn-action-view{href: url_for("/node/show/#{node[:full_name]}"), title: 'View details', :'aria-label' => "View details for #{node[:name]}", :'data-bs-toggle' => 'tooltip'}
+                %i.bi.bi-eye{:'aria-hidden' => 'true'}
+                %span Details
               %a.action-link{title: 'Download current configuration', :'aria-label' => "Download configuration for #{node[:name]}", href: url_for("/node/fetch/#{node[:full_name]}")}
                 %i.bi.bi-cloud-download{:'aria-hidden' => 'true'}
               %a.action-link{title: 'View configuration history', :'aria-label' => "View configuration history for #{node[:name]}", href: url_for("/node/version?node_full=#{node[:full_name]}")}
                 %i.bi.bi-clock-history{:'aria-hidden' => 'true'}
-              %form.inline-action{action: url_for("/node/next/#{node[:full_name]}"), method: 'post'}
-                %button.action-link{title: 'Run configuration backup', :'aria-label' => "Run configuration backup for #{node[:name]}", type: 'submit'}
-                  %i.bi.bi-arrow-repeat{:'aria-hidden' => 'true'}
+              - if @management_error.nil?
+                %a.action-link{title: 'Edit device', :'aria-label' => "Edit #{node[:name]}", href: url_for("/admin/devices/#{node[:name]}/edit")}
+                  %i.bi.bi-pencil-square{:'aria-hidden' => 'true'}
+                %form.inline-action{action: url_for("/node/next/#{node[:full_name]}"), method: 'post'}
+                  %button.action-link{title: 'Backup now', :'aria-label' => "Run configuration backup for #{node[:name]}", type: 'submit'}
+                    %i.bi.bi-arrow-repeat{:'aria-hidden' => 'true'}
+                %form.inline-action{action: url_for("/admin/devices/#{node[:name]}/delete"), method: 'post', onsubmit: "return confirm('Delete this device from the configured inventory? Git backup history will be retained.')"}
+                  %button.action-link.action-delete{title: 'Delete device', :'aria-label' => "Delete #{node[:name]} from inventory", type: 'submit'}
+                    %i.bi.bi-trash{:'aria-hidden' => 'true'}
 
 :javascript
   $(function() {
+    var refreshSelect = document.getElementById('refreshInterval');
+    if (refreshSelect) {
+      var savedInterval = localStorage.getItem('oxidized-dashboard-refresh') || '0';
+      refreshSelect.value = savedInterval;
+      refreshSelect.addEventListener('change', function() {
+        localStorage.setItem('oxidized-dashboard-refresh', this.value);
+        if (window.oxidizedRefreshTimer) window.clearInterval(window.oxidizedRefreshTimer);
+        var seconds = Number(this.value);
+        if (seconds > 0) window.oxidizedRefreshTimer = window.setInterval(function() { window.location.reload(); }, seconds * 1000);
+      });
+      var initialSeconds = Number(refreshSelect.value);
+      if (initialSeconds > 0) window.oxidizedRefreshTimer = window.setInterval(function() { window.location.reload(); }, initialSeconds * 1000);
+    }
     var table = $('#nodesTable').DataTable({
       columnDefs: [
+        { targets: 1, type: 'ip-sort' },
         { targets: 4, type: 'version-sort' },
         { targets: [0, 10], className: 'noVis' },
       ],
@@ -160,6 +246,10 @@
     $('#vendorFilter').on('change', function() { table.column(2).search(this.value, false, false).draw(); });
     $('#modelFilter').on('change', function() { table.column(3).search(this.value, false, false).draw(); });
     $('#statusFilter').on('change', function() { table.column(7).search(this.value, false, false).draw(); });
+    $('[data-vendor-filter]').on('click', function() {
+      $('#vendorFilter').val(this.dataset.vendorFilter).trigger('change');
+      document.getElementById('nodesTable').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
     $('#resetSearch').on('click', function() {
       $('#inventorySearch').val('');
       table.search('').draw();

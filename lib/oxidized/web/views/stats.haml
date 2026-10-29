@@ -74,7 +74,7 @@
             - last_success = 'never'
 
           - total_runs = successes + failures
-          - failure_rate = (failures / total_runs.to_f) * 100
+          - failure_rate = total_runs.zero? ? 0 : (failures / total_runs.to_f) * 100
           - row_class = 'warning' if failure_rate >= 50
           - row_class = 'danger' if failure_rate >= 75
 

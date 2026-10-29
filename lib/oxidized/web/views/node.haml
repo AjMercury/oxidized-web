@@ -8,19 +8,65 @@
     %h1= @data[:name]
     %p
       %span.vendor-mark{class: "vendor-#{vendor_logo(@data[:model])}", title: vendor_for_model(@data[:model])}
-        %i.bi.bi-hdd-network{:'aria-hidden' => 'true'}
+        - if vendor_logo_asset(@data[:model])
+          %img.vendor-logo{src: url_for("/images/vendors/#{vendor_logo_asset(@data[:model])}.svg"), alt: '', loading: 'lazy'}
+        - else
+          %i.bi.bi-hdd-network{:'aria-hidden' => 'true'}
       #{vendor_for_model(@data[:model])} · #{@data[:model]} · Node metadata as reported by Oxidized.
   .page-heading-actions
-    %a.btn.btn-outline-secondary{href: url_for("/node/fetch/#{@data[:full_name]}")}
-      %i.bi.bi-cloud-download{:'aria-hidden' => 'true'}
-      Configuration
-    %a.btn.btn-outline-secondary{href: url_for("/node/version?node_full=#{@data[:full_name]}")}
+    %a.btn.btn-outline-secondary{href: url_for("/node/version?node_full=#{@device_full_name}")}
       %i.bi.bi-clock-history{:'aria-hidden' => 'true'}
       History
-    %form{action: url_for("/node/next/#{@data[:full_name]}"), method: 'post'}
-      %button.btn.btn-primary{type: 'submit'}
-        %i.bi.bi-arrow-repeat{:'aria-hidden' => 'true'}
-        Run backup
+    %a.btn.btn-outline-secondary{href: url_for("/node/fetch/#{@device_full_name}")}
+      %i.bi.bi-file-earmark-code{:'aria-hidden' => 'true'}
+      Configuration
+    - if @management_error.nil?
+      %a.btn.btn-outline-primary{href: url_for("/admin/devices/#{@data[:name]}/edit")}
+        %i.bi.bi-pencil-square{:'aria-hidden' => 'true'}
+        Edit
+      %form.inline-action{action: url_for("/node/next/#{@device_full_name}"), method: 'post'}
+        %button.btn.btn-primary{type: 'submit'}
+          %i.bi.bi-arrow-repeat{:'aria-hidden' => 'true'}
+          Backup Now
+      %form.inline-action{action: url_for("/admin/devices/#{@data[:name]}/delete"), method: 'post', onsubmit: "return confirm('Delete this device from the configured inventory? Git backup history will be retained.')"}
+        %button.btn.btn-outline-danger{type: 'submit'}
+          %i.bi.bi-trash{:'aria-hidden' => 'true'}
+          Delete
+    - else
+      %a.btn.btn-outline-secondary{href: url_for('/admin/devices'), title: @management_error}
+        %i.bi.bi-shield-lock{:'aria-hidden' => 'true'}
+        Admin actions unavailable
+
+.device-detail-grid
+  .detail-card.detail-card-vendor
+    %span.detail-label Vendor / model
+    %strong= @data[:model]
+    %span.detail-value= vendor_for_model(@data[:model])
+  .detail-card.detail-card-address
+    %span.detail-label Management address
+    %strong= @data[:ip] || 'Unknown'
+    %span.detail-value= @data[:group] || 'default group'
+  .detail-card.detail-card-version
+    %span.detail-label Software version
+    %strong= @data.dig(:vars, 'version') || @data[:version] || 'Unknown'
+    %span.detail-value Reported by Oxidized; no live SSH probe
+  .detail-card.detail-card-status
+    %span.detail-label Latest backup
+    %strong.status-pill{class: "status-#{@device_status || 'unknown'}"}= (@device_status || 'unknown').to_s.tr('_', ' ')
+    %span.detail-value.time{epoch: @device_time && @device_time != 'never' ? @device_time.to_i : ''}= @device_time || 'never'
+  .detail-card.detail-card-revisions
+    %span.detail-label Saved revisions
+    %strong= @device_revision_count.nil? ? 'Unknown' : @device_revision_count
+    %span.detail-value No history rewrite is performed by viewing this page
+  .detail-card.detail-card-changed
+    %span.detail-label Last configuration change
+    %strong.time{epoch: @device_mtime ? @device_mtime.to_i : ''}= @device_mtime || 'Unknown'
+    %span.detail-value From the configured output backend
+
+.section-heading
+  .section-heading-copy
+    %h2 Device metadata
+    %p Sensitive node variables are redacted before rendering.
 .config-panel
   .config-panel-header
     .config-panel-label

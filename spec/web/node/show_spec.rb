@@ -53,7 +53,7 @@ describe Oxidized::API::WebApp do
       mtime: Time.parse("2025-02-05 19:49:11 +0100")
     }
 
-    @nodes.expects(:show).with("sw5").returns(@serialized_node)
+    @nodes.expects(:show).with("sw5").returns(@serialized_node).at_most_once
   end
 
   describe "get /node/show/:node" do
@@ -85,6 +85,20 @@ describe Oxidized::API::WebApp do
         # The note data is not changed (deep copy with Marshal)
         _(@serialized_node[:vars][:enable]).must_equal "secret_enable"
       end
+    end
+
+    it 'shows the correct device details for a grouped node path' do
+      @nodes.expects(:list).returns(
+        [{ name: 'sw5', full_name: 'group1/sw5', group: 'group1', ip: '192.0.2.5',
+           model: 'ios', vars: { version: 'IOS XE 17.9' }, last: { status: :success, end: Time.at(1) } }]
+      )
+
+      get '/node/show/group1/sw5'
+
+      _(last_response.ok?).must_equal true
+      _(last_response.body).must_include('192.0.2.5')
+      _(last_response.body).must_include('IOS XE 17.9')
+      _(last_response.body).must_include('/node/version?node_full=group1/sw5')
     end
 
     describe "Oxidized > 0.34.1" do

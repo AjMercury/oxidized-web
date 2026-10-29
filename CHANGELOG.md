@@ -34,6 +34,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-10-29
+
+### Added
+- Add local vendor SVG marks for Cisco, MikroTik, Juniper, Fortinet, Palo Alto Networks, Huawei, Ubiquiti, and Dell, with generic icon fallbacks and vendor previews in add/edit forms.
+- Add configurable inventory auto-refresh, animated data-backed counters, and polished responsive dashboard, device details, and diff controls.
+- Add an explicit administration-disabled page that explains missing credentials, unsupported inventory sources, and history-safe reload requirements.
+
+### Fixed
+- Fix bulk device controls rendering inside the model `<select>`, which prevented reliable selection and submission in browsers.
+- Fix backup history failure-rate rendering when a device has no recorded runs.
+- Fix diff unified/full-screen toggles using CSS class names that did not match the stylesheet.
+- Fix device detail links for group-qualified names by resolving the full inventory identity through the existing Core node list without altering the Web JSON payload.
+- Preserve RouterOS 6 and 7 generated export timestamp comments from Git configuration output via compatible Core 0.37.2.
+
+### Compatibility
+- Compatible release target: Oxidized Core 0.37.2 and Oxidized Web 0.21.0. Both upgrades are required for history-safe inventory management and RouterOS timestamp normalization.
+- Web Ruby suite: 94 runs, 415 assertions, 0 failures/errors, 2 Windows-only skips; changed-file RuboCop clean; Web gem built successfully. Core RouterOS regression: 3 runs, 24 assertions, 0 failures/errors; changed-file RuboCop clean; Core gem built successfully.
+- Full Core suite is not green on Windows (453 runs, 17 failures, 9 errors), due Windows path normalization, unsupported POSIX signals, and Git path assumptions; full Ubuntu 24.04 validation remains required before merge/deployment.
+
 ## [0.20.0] - 2026-10-29
 
 ### Added

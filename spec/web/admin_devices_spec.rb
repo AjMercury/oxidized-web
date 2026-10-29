@@ -98,6 +98,19 @@ describe 'administrator device management' do
     _(last_response.body).must_include('Search installed Core models')
     _(last_response.body).must_include('All vendors')
     _(last_response.body).must_include('Cisco')
+    _(last_response.body).must_include('/images/vendors/cisco.svg')
+    _(last_response.body).must_match(%r{</select>\s*<form[^>]*id="bulkDevices"}m)
+  end
+
+  it 'explains why device management is disabled when administrator credentials are missing' do
+    app.set(:configuration, { hide_node_vars: [], admin_username: nil, admin_password: nil })
+
+    get '/admin/devices'
+
+    _(last_response.status).must_equal 503
+    _(last_response.body).must_include('Administrative actions are disabled')
+    _(last_response.body).must_include('OXIDIZED_WEB_ADMIN_USERNAME')
+    _(last_response.body).must_include('HTTPS reverse proxy')
   end
 
   it 'allows a configured read-only role to view inventory but denies writes' do

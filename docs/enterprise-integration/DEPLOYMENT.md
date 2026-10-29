@@ -82,8 +82,8 @@ After approval, install the exact reviewed gem artifacts and dependencies using
 the same RubyGems environment as `/usr/local/bin/oxidized`:
 
 ```sh
-sudo gem install --local ./oxidized-0.37.1.gem
-sudo gem install --local ./oxidized-web-0.20.0.gem
+sudo gem install --local ./oxidized-0.37.2.gem
+sudo gem install --local ./oxidized-web-0.21.0.gem
 sudo systemctl daemon-reload
 sudo systemctl restart oxidized.service
 ```
@@ -114,17 +114,30 @@ If the service fails health checks, restore the previously installed gem
 versions and saved files from the protected backup, then restart:
 
 ```sh
-sudo gem uninstall oxidized-web --version 0.20.0 --ignore-dependencies
-sudo gem install --local ./oxidized-web-0.19.0.gem
+sudo gem uninstall oxidized-web --version 0.21.0 --ignore-dependencies
+sudo gem install --local ./oxidized-web-0.20.0.gem
 sudo systemctl daemon-reload
 sudo systemctl restart oxidized.service
 sudo systemctl is-active oxidized.service
 ```
 
-Keep Core at 0.37.1 for this Web-only rollback. If Core itself must be rolled
-back to 0.37.0, install that exact gem separately and remove the Web
-administrator credentials from the service environment because the earlier
-Core does not provide the history-preserving inventory reload API.
+If reverting both releases, restore the saved Core 0.37.1 gem as well. Web
+0.20.0 is compatible with Core 0.37.1 but does not include the RouterOS export
+timestamp fix from Core 0.37.2. Keep history-safe inventory writes disabled if
+the Core API is rolled back to a version without `clean_obsolete: false`.
+
+When the saved gems are available in the working directory, the exact package
+rollback is:
+
+```sh
+sudo gem uninstall oxidized-web --version 0.21.0 --ignore-dependencies
+sudo gem install --local ./oxidized-web-0.20.0.gem
+sudo gem uninstall oxidized --version 0.37.2 --ignore-dependencies
+sudo gem install --local ./oxidized-0.37.1.gem
+sudo systemctl daemon-reload
+sudo systemctl restart oxidized.service
+sudo systemctl is-active oxidized.service
+```
 
 Restore application files only if they were changed, and restore the CSV and
 Git output repository only after quiescing Oxidized:

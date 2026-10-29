@@ -31,6 +31,15 @@
     %span.text-muted Selected version
     %span.time{epoch: @info[:time].to_i}= @info[:time]
 
+.diff-view-toolbar
+  %span.diff-view-label Compare view
+  %button.btn.btn-sm.btn-outline-secondary#diffUnifiedToggle{type: 'button', :'aria-pressed' => 'false'}
+    %i.bi.bi-list-ul{:'aria-hidden' => 'true'}
+    Unified
+  %button.btn.btn-sm.btn-outline-secondary#diffExpand{type: 'button', :'aria-pressed' => 'false'}
+    %i.bi.bi-arrows-fullscreen{:'aria-hidden' => 'true'}
+    Expand comparison
+
 .diff-select-card
   .diff-select-copy
     %strong Choose comparison version
@@ -65,7 +74,7 @@
     %strong Version #{@info[:num]}
     %span.time{epoch: @info[:time].to_i}= @info[:time]
 
-.diff-pane-grid{:'aria-label' => 'Side-by-side configuration comparison'}
+.diff-pane-grid#sideBySideDiff{:'aria-label' => 'Side-by-side configuration comparison'}
   .diff-pane.diff-pane-old
     .diffs_old{role: 'region', :'aria-label' => 'Previous configuration version', tabindex: '0'}
       - @diff[:old_diff].each do |line|
@@ -81,6 +90,12 @@
         - elsif /^empty_line&nbsp;/.match(line)
           - line.slice! "empty_line"
           .diff-empty><
+            != escape_once("#{line}")
+        - elsif /^\s*#/.match(line)
+          .diff-comment><
+            != escape_once("#{line}")
+        - elsif /^\s*\//.match(line)
+          .diff-section><
             != escape_once("#{line}")
         - else
           %div><
@@ -101,6 +116,68 @@
           - line.slice! "empty_line"
           .diff-empty><
             != escape_once("#{line}")
+        - elsif /^\s*#/.match(line)
+          .diff-comment><
+            != escape_once("#{line}")
+        - elsif /^\s*\//.match(line)
+          .diff-section><
+            != escape_once("#{line}")
         - else
           %div><
             != escape_once("#{line}")
+
+.unified-diff#unifiedDiff{hidden: true, role: 'region', :'aria-label' => 'Unified configuration comparison', tabindex: '0'}
+  - @diff_patch.each_line do |line|
+    - if /^\+/.match(line)
+      .added><
+        != escape_once("#{line}")
+    - elsif /^-/.match(line)
+      .deleted><
+        != escape_once("#{line}")
+    - elsif /^@@\s.*@@/.match(line)
+      .diff-index><
+        != escape_once("#{line}")
+    - elsif /^\s*#/.match(line)
+      .diff-comment><
+        != escape_once("#{line}")
+    - else
+      %div><
+        != escape_once("#{line}")
+
+:javascript
+  $(function() {
+    var oldPane = document.querySelector('.diffs_old');
+    var newPane = document.querySelector('.diffs_new');
+    var syncLock = false;
+    [[oldPane, newPane], [newPane, oldPane]].forEach(function(pair) {
+      pair[0].addEventListener('scroll', function() {
+        if (syncLock) return;
+        syncLock = true;
+        pair[1].scrollTop = pair[0].scrollTop;
+        syncLock = false;
+      }, { passive: true });
+    });
+    $('#diffUnifiedToggle').on('click', function() {
+      var unified = document.getElementById('unifiedDiff');
+      var sideBySide = document.getElementById('sideBySideDiff');
+      var showing = unified.hidden;
+      unified.hidden = !showing;
+      sideBySide.hidden = showing;
+      unified.classList.toggle('is-visible', showing);
+      this.setAttribute('aria-pressed', String(showing));
+      this.innerHTML = showing ? '<i class="bi bi-columns-gap" aria-hidden="true"></i> Side by side' : '<i class="bi bi-list-ul" aria-hidden="true"></i> Unified';
+    });
+    $('#diffExpand').on('click', function() {
+      var panels = document.querySelectorAll('.diff-pane-grid, .unified-diff');
+      var expanded = !Array.from(panels).some(function(panel) { return panel.classList.contains('is-expanded'); });
+      panels.forEach(function(panel) { panel.classList.toggle('is-expanded', expanded); });
+      this.setAttribute('aria-pressed', String(expanded));
+      this.innerHTML = expanded ? '<i class="bi bi-fullscreen-exit" aria-hidden="true"></i> Exit full screen' : '<i class="bi bi-arrows-fullscreen" aria-hidden="true"></i> Expand comparison';
+    });
+    document.addEventListener('keydown', function(event) {
+      if (event.key === 'Escape') {
+        document.querySelectorAll('.is-expanded').forEach(function(panel) { panel.classList.remove('is-expanded'); });
+        $('#diffExpand').attr('aria-pressed', 'false');
+      }
+    });
+  });
