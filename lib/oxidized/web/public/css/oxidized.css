@@ -4750,3 +4750,165 @@ body {
     min-height: 44px;
   }
 }
+
+/* Keep the overview inventory inside the viewport and its actions icon-only. */
+.dashboard-table-responsive,
+.dashboard-table-responsive .dt-container {
+  width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
+}
+#nodesTable {
+  width: 100%;
+  min-width: 0;
+  table-layout: fixed;
+}
+#nodesTable th,
+#nodesTable td {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+#nodesTable th:nth-child(1),
+#nodesTable td:nth-child(1) { width: 14%; }
+#nodesTable th:nth-child(2),
+#nodesTable td:nth-child(2) { width: 9%; }
+#nodesTable th:nth-child(3),
+#nodesTable td:nth-child(3) { width: 7%; }
+#nodesTable th:nth-child(4),
+#nodesTable td:nth-child(4) { width: 10%; }
+#nodesTable th:nth-child(5),
+#nodesTable td:nth-child(5) { width: 7%; }
+#nodesTable th:nth-child(6),
+#nodesTable td:nth-child(6) { width: 5%; }
+#nodesTable th:nth-child(7),
+#nodesTable td:nth-child(7) { width: 6%; }
+#nodesTable th:nth-child(8),
+#nodesTable td:nth-child(8) { width: 8%; }
+#nodesTable th:nth-child(9),
+#nodesTable td:nth-child(9) { width: 9%; }
+#nodesTable th:nth-child(10),
+#nodesTable td:nth-child(10) { width: 8%; }
+#nodesTable th:nth-child(11),
+#nodesTable td:nth-child(11) { width: 17%; }
+#nodesTable .actions-cell {
+  min-width: 0;
+  white-space: normal;
+  vertical-align: middle;
+}
+#nodesTable .row-actions {
+  display: grid;
+  grid-template-columns: repeat(3, 34px);
+  justify-content: start;
+  gap: 4px;
+}
+#nodesTable .row-actions > a,
+#nodesTable .row-actions > form {
+  display: inline-flex;
+  width: 34px;
+  min-width: 0;
+  height: 34px;
+  margin: 0;
+  padding: 0;
+}
+#nodesTable .row-actions .action-link,
+#nodesTable .row-actions .btn-action {
+  display: inline-flex;
+  width: 34px;
+  min-width: 34px;
+  min-height: 34px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+#nodesTable .row-actions [title] { cursor: pointer; }
+#nodesTable .row-actions [title]:focus-visible {
+  outline: 2px solid var(--ow-color-accent);
+  outline-offset: 2px;
+}
+.device-mobile-summary { display: none; }
+
+@media (max-width: 1399.98px) {
+  #nodesTable th:nth-child(5),
+  #nodesTable td:nth-child(5),
+  #nodesTable th:nth-child(6),
+  #nodesTable td:nth-child(6),
+  #nodesTable th:nth-child(7),
+  #nodesTable td:nth-child(7),
+  #nodesTable th:nth-child(10),
+  #nodesTable td:nth-child(10) {
+    display: none;
+  }
+  #nodesTable th:nth-child(1),
+  #nodesTable td:nth-child(1) { width: 19%; }
+  #nodesTable th:nth-child(2),
+  #nodesTable td:nth-child(2) { width: 13%; }
+  #nodesTable th:nth-child(3),
+  #nodesTable td:nth-child(3) { width: 10%; }
+  #nodesTable th:nth-child(4),
+  #nodesTable td:nth-child(4) { width: 15%; }
+  #nodesTable th:nth-child(8),
+  #nodesTable td:nth-child(8) { width: 10%; }
+  #nodesTable th:nth-child(9),
+  #nodesTable td:nth-child(9) { width: 13%; }
+  #nodesTable th:nth-child(11),
+  #nodesTable td:nth-child(11) { width: 20%; }
+}
+
+@media (max-width: 767.98px) {
+  #nodesTable th:nth-child(2),
+  #nodesTable td:nth-child(2),
+  #nodesTable th:nth-child(3),
+  #nodesTable td:nth-child(3),
+  #nodesTable th:nth-child(4),
+  #nodesTable td:nth-child(4),
+  #nodesTable th:nth-child(9),
+  #nodesTable td:nth-child(9) {
+    display: none;
+  }
+  #nodesTable th:nth-child(1),
+  #nodesTable td:nth-child(1) { width: 36%; }
+  #nodesTable th:nth-child(8),
+  #nodesTable td:nth-child(8) { width: 20%; }
+  #nodesTable th:nth-child(11),
+  #nodesTable td:nth-child(11) { width: 44%; }
+  #nodesTable .device-subtitle { display: none; }
+  #nodesTable .device-mobile-summary {
+    display: block;
+    margin-top: 3px;
+    color: var(--ow-color-text-muted);
+    font-size: 11px;
+    line-height: 1.35;
+  }
+  #nodesTable .status-pill {
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  #nodesTable .row-actions {
+    grid-template-columns: repeat(3, 44px);
+    gap: 4px;
+  }
+  #nodesTable .row-actions > a,
+  #nodesTable .row-actions > form,
+  #nodesTable .row-actions .action-link,
+  #nodesTable .row-actions .btn-action {
+    width: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    height: 44px;
+  }
+}
+
+@media (max-width: 399.98px) {
+  #nodesTable .row-actions { grid-template-columns: repeat(2, 44px); }
+}
+
+@media (max-width: 359.98px) {
+  #nodesTable th:nth-child(1),
+  #nodesTable td:nth-child(1) { width: 34%; }
+  #nodesTable th:nth-child(8),
+  #nodesTable td:nth-child(8) { width: 24%; }
+  #nodesTable th:nth-child(11),
+  #nodesTable td:nth-child(11) { width: 42%; }
+}

@@ -195,7 +195,7 @@
     %button.btn.btn-outline-secondary.btn-sm#resetSearch{type: 'button'}
       %i.bi.bi-eraser{:'aria-hidden' => 'true'}
       Clear search
-  .table-responsive
+  .table-responsive.dashboard-table-responsive
     %table.table.table-hover.align-middle#nodesTable
       %thead
         %tr
@@ -216,6 +216,7 @@
             %td.device-cell
               %a.device-name{href: url_for("/node/show/#{node[:name]}")}= node[:name]
               %span.device-subtitle= node[:full_name] unless node[:full_name] == node[:name]
+              %span.device-mobile-summary= [node[:ip] || 'Unknown', vendor_for_model(node[:model]), node[:model]].join(' · ')
             %td.text-muted{:'data-order' => node[:ip]}= node[:ip]
             %td.vendor-cell
               %span.vendor-mark{class: "vendor-#{vendor_logo(node[:model])}", title: vendor_for_model(node[:model])}
@@ -236,26 +237,25 @@
             %td.time.text-nowrap{epoch: node[:time] && node[:time] != 'never' ? node[:time].to_i : '', :'data-order' => node[:time] && node[:time] != 'never' ? node[:time].to_i : 0}= node[:time]
             %td.time.text-nowrap{epoch: node[:last_changed_at]&.to_i, :'data-order' => node[:last_changed_at]&.to_i || 0}= node[:last_changed_at] || 'Unknown'
             %td.actions-cell
-              %a.btn.btn-sm.btn-action.btn-action-view{href: url_for("/node/show/#{node[:full_name]}"), title: 'View details', :'aria-label' => "View details for #{node[:name]}", :'data-bs-toggle' => 'tooltip'}
-                %i.bi.bi-eye{:'aria-hidden' => 'true'}
-                %span Details
-              %a.action-link{title: 'Download current configuration', :'aria-label' => "Download configuration for #{node[:name]}", href: url_for("/node/fetch/#{node[:full_name]}")}
-                %i.bi.bi-cloud-download{:'aria-hidden' => 'true'}
-              %a.action-link{title: 'View configuration history', :'aria-label' => "View configuration history for #{node[:name]}", href: url_for("/node/version?node_full=#{node[:full_name]}")}
-                %i.bi.bi-clock-history{:'aria-hidden' => 'true'}
-              - if @current_admin == :admin
-                %form.inline-action{action: url_for("/node/next/#{node[:full_name]}"), method: 'post'}
-                  %input{type: 'hidden', name: 'csrf_token', value: @csrf_token}
-                  %button.action-link{title: 'Backup now', :'aria-label' => "Run configuration backup for #{node[:name]}", type: 'submit'}
-                    %i.bi.bi-cloud-arrow-down{:'aria-hidden' => 'true'}
-                    Backup Now
-              - if @management_error.nil?
-                %a.action-link{title: 'Edit device', :'aria-label' => "Edit #{node[:name]}", href: url_for("/admin/devices/#{node[:name]}/edit")}
-                  %i.bi.bi-pencil-square{:'aria-hidden' => 'true'}
-                %form.inline-action{action: url_for("/admin/devices/#{node[:name]}/delete"), method: 'post', onsubmit: "return confirm('Delete this device from the configured inventory? Git backup history will be retained.')"}
-                  %input{type: 'hidden', name: 'csrf_token', value: @csrf_token}
-                  %button.action-link.action-delete{title: 'Delete device', :'aria-label' => "Delete #{node[:name]} from inventory", type: 'submit'}
-                    %i.bi.bi-trash{:'aria-hidden' => 'true'}
+              .row-actions
+                %a.btn.btn-sm.btn-action.btn-action-view{href: url_for("/node/show/#{node[:full_name]}"), title: 'View device details', :'aria-label' => "View details for #{node[:name]}", :'data-bs-toggle' => 'tooltip'}
+                  %i.bi.bi-eye{:'aria-hidden' => 'true'}
+                %a.action-link{title: 'Download current configuration', :'aria-label' => "Download configuration for #{node[:name]}", href: url_for("/node/fetch/#{node[:full_name]}")}
+                  %i.bi.bi-cloud-download{:'aria-hidden' => 'true'}
+                %a.action-link{title: 'View configuration history', :'aria-label' => "View configuration history for #{node[:name]}", href: url_for("/node/version?node_full=#{node[:full_name]}")}
+                  %i.bi.bi-clock-history{:'aria-hidden' => 'true'}
+                - if @current_admin == :admin
+                  %form.inline-action{action: url_for("/node/next/#{node[:full_name]}"), method: 'post'}
+                    %input{type: 'hidden', name: 'csrf_token', value: @csrf_token}
+                    %button.action-link{title: 'Run configuration backup now', :'aria-label' => "Run configuration backup for #{node[:name]}", type: 'submit'}
+                      %i.bi.bi-cloud-arrow-down{:'aria-hidden' => 'true'}
+                - if @management_error.nil?
+                  %a.action-link{title: 'Edit device', :'aria-label' => "Edit #{node[:name]}", href: url_for("/admin/devices/#{node[:name]}/edit")}
+                    %i.bi.bi-pencil-square{:'aria-hidden' => 'true'}
+                  %form.inline-action{action: url_for("/admin/devices/#{node[:name]}/delete"), method: 'post', onsubmit: "return confirm('Delete this device from the configured inventory? Git backup history will be retained.')"}
+                    %input{type: 'hidden', name: 'csrf_token', value: @csrf_token}
+                    %button.action-link.action-delete{title: 'Delete device', :'aria-label' => "Delete #{node[:name]} from inventory", type: 'submit'}
+                      %i.bi.bi-trash{:'aria-hidden' => 'true'}
 
 .section-heading.activity-heading
   .section-heading-copy
