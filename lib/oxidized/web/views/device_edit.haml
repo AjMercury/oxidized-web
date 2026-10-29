@@ -1,0 +1,77 @@
+.page-heading
+  .page-heading-copy
+    .breadcrumbs
+      %a{href: url_for('/admin/devices')} Device management
+      %i.bi.bi-chevron-right{:'aria-hidden' => 'true'}
+      %span= @device[:name]
+    %span.eyebrow.text-muted Administrator workspace
+    %h1 Edit device
+    %p Update mapped inventory fields for #{@device[:name]}.
+.table-card.device-form-card
+  %form{action: url_for("/admin/devices/#{@device[:name]}"), method: 'post', autocomplete: 'off'}
+    %input{type: 'hidden', name: 'csrf_token', value: @csrf_token}
+    .device-form-grid
+      - [['new_name', 'name', 'Hostname'], ['ip', 'ip', 'Management IP / FQDN'], ['group', 'group', 'Device group'], ['username', 'username', 'Username']].each do |input_name, field, label|
+        - if @device_fields.include?(field)
+          .mb-3
+            %label.form-label{for: "device-#{field}"}= label
+            %input.form-control{id: "device-#{field}", name: input_name, type: 'text', value: field == 'name' ? @device[:name] : @device[field.to_sym], required: %w[name ip].include?(field), autocomplete: 'off'}
+      - if @device_fields.include?('model')
+        .mb-3
+          %label.form-label{for: 'device-vendor'} Vendor
+          %select.form-select#device-vendor{:'aria-label' => 'Filter models by vendor'}
+            %option{value: ''} All vendors
+            - @models.map { |model| vendor_for_model(model) }.uniq.sort.each do |vendor|
+              %option{value: vendor, selected: vendor_for_model(@device[:model]) == vendor, :'data-logo-url' => vendor_logo_asset(vendor) && url_for("/images/vendors/#{vendor_logo_asset(vendor)}.svg")}= vendor
+          .vendor-selector-brand#vendorLogoPreview{:'aria-live' => 'polite'}
+            - if vendor_logo_asset(@device[:model])
+              %img.vendor-logo{src: url_for("/images/vendors/#{vendor_logo_asset(@device[:model])}.svg"), alt: ''}
+            - else
+              %i.bi.bi-hdd-network{:'aria-hidden' => 'true'}
+            %span= vendor_for_model(@device[:model])
+        .mb-3
+          %label.form-label.mt-2{for: 'device-model'} Oxidized model
+          %input.form-control#device-model{name: 'model', type: 'search', list: 'oxidized-model-list', value: @device[:model], required: true, autocomplete: 'off'}
+          %datalist#oxidized-model-list
+            - @models.each do |model|
+              %option{value: model, :'data-vendor' => vendor_for_model(model)}
+      - [['password', 'Password'], ['enable', 'Enable password'], ['ssh_port', 'SSH port'], ['telnet_port', 'Telnet port'], ['timeout', 'Connection timeout'], ['input', 'Connection protocol'], ['description', 'Description']].each do |field, label|
+        - if @device_fields.include?(field)
+          .mb-3
+            %label.form-label{for: "device-#{field}"}= label
+            %input.form-control{id: "device-#{field}", name: field, type: %w[password enable].include?(field) ? 'password' : 'text', value: %w[password enable].include?(field) ? '' : @device.dig(:vars, field), autocomplete: %w[password enable].include?(field) ? 'new-password' : 'off'}
+    %p.form-text Leave username and password fields blank to keep the stored credentials.
+    .device-form-actions
+      %a.btn.btn-outline-secondary{href: url_for('/admin/devices')} Cancel
+      %button.btn.btn-primary{type: 'submit'} Save changes
+:javascript
+  $(function() {
+    var models = Array.from(document.querySelectorAll('#oxidized-model-list option'));
+    $('#device-vendor').on('change', function() {
+      var vendor = this.value;
+      var selected = this.options[this.selectedIndex];
+      var logoUrl = selected && selected.dataset.logoUrl;
+      var preview = document.getElementById('vendorLogoPreview');
+      if (preview) {
+        preview.replaceChildren();
+        if (logoUrl) {
+          var image = document.createElement('img');
+          image.className = 'vendor-logo';
+          image.alt = '';
+          image.src = logoUrl;
+          preview.appendChild(image);
+        } else {
+          var fallback = document.createElement('i');
+          fallback.className = 'bi bi-hdd-network';
+          fallback.setAttribute('aria-hidden', 'true');
+          preview.appendChild(fallback);
+        }
+        var label = document.createElement('span');
+        label.textContent = vendor || 'Select a vendor to preview its logo';
+        preview.appendChild(label);
+      }
+      models.forEach(function(option) { option.disabled = !!vendor && option.dataset.vendor !== vendor; });
+      var current = document.getElementById('device-model');
+      if (vendor && current.value && !models.some(function(option) { return option.value === current.value && option.dataset.vendor === vendor; })) current.value = '';
+    });
+  });

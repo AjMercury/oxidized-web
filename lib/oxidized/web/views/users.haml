@@ -1,0 +1,34 @@
+.page-heading
+  .page-heading-copy
+    %span.eyebrow.text-muted Administration
+    %h1 User management
+    %p Manage local administrator and read-only accounts.
+  .page-heading-actions
+    %a.btn.btn-primary{href: url_for('/admin/users/new')}
+      %i.bi.bi-person-plus{:'aria-hidden' => 'true'}
+      Create user
+.table-card
+  .table-responsive
+    %table.table.table-hover.align-middle#usersTable
+      %thead
+        %tr
+          %th{scope: 'col'} Username
+          %th{scope: 'col'} Role
+          %th{scope: 'col'} Status
+          %th{scope: 'col'} Last login
+          %th{scope: 'col'} Actions
+      %tbody
+        - @users.each do |user|
+          %tr
+            %td= user[:username]
+            %td= user[:role].to_s.capitalize
+            %td
+              %span.status-pill{class: user[:enabled] ? 'status-success' : 'status-failed'}= user[:enabled] ? 'Enabled' : 'Disabled'
+            %td= user[:last_login_at] ? user[:last_login_at].utc.strftime('%Y-%m-%d %H:%M UTC') : 'Never'
+            %td.actions-cell
+              %a.btn.btn-sm.btn-outline-primary{href: url_for("/admin/users/#{user[:id]}/edit")} Edit / reset password
+              - unless user[:id] == @current_user[:id]
+                %form.inline-action{action: url_for("/admin/users/#{user[:id]}/delete"), method: 'post',
+                                    onsubmit: "return confirm('Delete this account and revoke its sessions?')"}
+                  %input{type: 'hidden', name: 'csrf_token', value: @csrf_token}
+                  %button.btn.btn-sm.btn-outline-danger{type: 'submit'} Delete

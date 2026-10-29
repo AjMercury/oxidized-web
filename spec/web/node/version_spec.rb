@@ -4,12 +4,13 @@ describe Oxidized::API::WebApp do
   include Rack::Test::Methods
 
   def app
-    Oxidized::API::WebApp
+    AuthenticatedWebTestGateway
   end
 
   before do
     @nodes = mock('Oxidized::Nodes')
     app.set(:nodes, @nodes)
+    AuthenticatedWebTestGateway.prepare
   end
 
   describe 'get /node/version.?:format?' do
@@ -28,7 +29,7 @@ describe Oxidized::API::WebApp do
       _(last_response.ok?).must_equal true
       _(last_response.body).must_include('<span class="version-chip">v3</span>')
       _(last_response.body).must_include(
-        "<td class=\"time\" epoch=\"1738781340\">2025-02-05 19:49:00 +0100</td>"
+        "<td class=\"time\" data-order=\"1738781340\" epoch=\"1738781340\">2025-02-05 19:49:00 +0100</td>"
       )
 
       _(last_response.body.include?(
@@ -58,7 +59,7 @@ describe Oxidized::API::WebApp do
       _(last_response.ok?).must_equal true
       _(last_response.body).must_include('<span class="version-chip">v3</span>')
       _(last_response.body).must_include(
-        "<td class=\"time\" epoch=\"1738781340\">2025-02-05 19:49:00 +0100</td>"
+        "<td class=\"time\" data-order=\"1738781340\" epoch=\"1738781340\">2025-02-05 19:49:00 +0100</td>"
       )
       _(last_response.body).must_include(
         'href="/node/version/view?node=sw5&amp;group=group1&amp;oid=C006&amp;epoch=1738781340&amp;num=3"'
@@ -75,7 +76,7 @@ describe Oxidized::API::WebApp do
       _(last_response.ok?).must_equal true
       _(last_response.body).must_include('<span class="version-chip">v3</span>')
       _(last_response.body).must_include(
-        "<td class=\"time\" epoch=\"1738781340\">2025-02-05 19:49:00 +0100</td>"
+        "<td class=\"time\" data-order=\"1738781340\" epoch=\"1738781340\">2025-02-05 19:49:00 +0100</td>"
       )
     end
 
@@ -181,7 +182,7 @@ describe Oxidized::API::WebApp do
       _(body).must_match(/<option(?=[^>]*\bselected(?:="selected")?(?:\s|>))(?=[^>]*value="C001")[^>]*>/)
       previous_pane = body.split('<div class="diff-pane diff-pane-old">', 2).last
                           .split('<div class="diff-pane diff-pane-new">', 2).first
-      selected_pane = body.split('<div class="diff-pane diff-pane-new">', 2).last
+      selected_pane = body.split('<div class="diff-pane diff-pane-new">', 2).last.split('<div aria-label="Unified configuration comparison"', 2).first
       _(previous_pane).must_include('changed line old')
       _(previous_pane).wont_include('changed line new1')
       _(selected_pane).must_include('changed line new1')

@@ -4,12 +4,23 @@ describe Oxidized::API::WebApp do
   include Rack::Test::Methods
 
   def app
-    Oxidized::API::WebApp
+    AuthenticatedWebTestGateway
   end
 
   before do
     @nodes = mock('Oxidized::Nodes')
     app.set(:nodes, @nodes)
+    app.set(:configuration, {
+              hide_node_vars: [], admin_username: 'test-admin', admin_password: 'test-password'
+            })
+    AuthenticatedWebTestGateway.prepare
+  end
+
+  def admin_headers
+    {
+      'HTTP_AUTHORIZATION' => "Basic #{Base64.strict_encode64('test-admin:test-password')}",
+      'HTTP_ORIGIN' => 'https://example.org'
+    }
   end
 
   describe '/node/fetch/' do
@@ -51,7 +62,7 @@ describe Oxidized::API::WebApp do
       # Don't know why the method has been called Nodes#next...
       # This is for reloading the node configuration
       @nodes.expects(:next).with('sw42')
-      get '/node/next/sw42'
+      post '/node/next/sw42', {}, admin_headers
 
       _(last_response.redirect?).must_equal true
       _(last_response.location).must_equal 'http://example.org/nodes'
@@ -59,7 +70,7 @@ describe Oxidized::API::WebApp do
 
     it 'returns ok when requiring json' do
       @nodes.expects(:next).with('sw42')
-      get '/node/next/sw42.json'
+      post '/node/next/sw42.json', {}, admin_headers
 
       _(last_response.ok?).must_equal true
       _(last_response.body).must_equal '["ok"]'
@@ -75,7 +86,7 @@ describe Oxidized::API::WebApp do
       }
       @nodes.expects(:next).with('sw42', data)
 
-      put '/node/next/sw42.json', data.to_json, "CONTENT_TYPE" => "application/json"
+      put '/node/next/sw42.json', data.to_json, { 'CONTENT_TYPE' => 'application/json' }.merge(admin_headers)
 
       _(last_response.ok?).must_equal true
       _(last_response.body).must_equal '["ok"]'
@@ -90,10 +101,32 @@ describe Oxidized::API::WebApp do
       }
       @nodes.expects(:next).with('sw42', data)
 
-      put '/node/next/mygroup/sw42', data.to_json, "CONTENT_TYPE" => "application/json"
+      put '/node/next/mygroup/sw42', data.to_json, { 'CONTENT_TYPE' => 'application/json' }.merge(admin_headers)
 
       _(last_response.redirect?).must_equal true
       _(last_response.location).must_equal 'http://example.org/nodes'
+    end
+
+    it 'requires administrator authentication and a same-origin request' do
+      AuthenticatedWebTestGateway.clear
+      @nodes.expects(:next).never
+
+      post '/node/next/sw42.json'
+      _(last_response.status).must_equal 401
+
+      AuthenticatedWebTestGateway.prepare
+      post '/node/next/sw42.json', {},
+           'HTTP_ORIGIN' => 'https://attacker.example'
+      _(last_response.status).must_equal 403
+    end
+
+    it 'denies backup triggering to viewer accounts' do
+      AuthenticatedWebTestGateway.as_role(:viewer)
+      @nodes.expects(:next).never
+
+      post '/node/next/sw42.json', {}, admin_headers
+
+      _(last_response.status).must_equal 403
     end
   end
 end

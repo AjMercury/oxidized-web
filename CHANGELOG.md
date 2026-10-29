@@ -3,21 +3,189 @@
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
-## [Unreleased]
+
+## [0.25.1] - 2026-10-29
+
+### Fixed
+- Separate inventory row actions and give Backup Now a labeled, bordered control with sufficient column width.
+- Strengthen dark table, form and status colors using the approved theme tokens.
+- Bump the stylesheet cache version so deployed browsers receive the corrections.
+
+## [0.25.0] - 2026-10-29
 
 ### Added
+- Add administrator-only Backup All Now actions to Dashboard and Device Management, with the complete Core inventory count in the confirmation.
+- Add labeled Backup Now actions to Inventory, Management, and Device Details, plus selected-device backups across pagination.
+- Display real Core queued, running, succeeded, failed, and completed state, execution timestamps, and failure reasons. Suppress duplicate active requests and distinguish unavailable tracking after restart.
+
+### Changed
+- Require the companion fork's Core 0.37.3 manual queue API for tracked backups; enqueueing never implies successful collection or a new revision.
+- Apply the Midnight Violet palette through shared light/dark tokens, neutral KPI surfaces, semantic status icons, navigation, pagination, controls, login, charts, and diffs.
+- Give Dashboard refresh, CSV inventory reload, and configuration collection distinct labels and icons.
+
+### Compatibility
+- Deploy Core 0.37.3 and Web 0.25.0 together. Core owns scheduling, retry completion, configuration comparison, Git storage, and concurrency limits.
+- See docs/ubuntu-24.04-upgrade.md for paired installation and rollback. Production data and historical Git revisions are not migrated.
+
+### Verification
+- Web Ruby: 133 tests / 636 assertions passed, four Windows platform skips; JavaScript: 15 passed; Web Ruby lint: 25 files clean.
+- Core manual queue: seven tests / 32 assertions passed; RouterOS production Git tests: six tests / 45 assertions passed. Full Core on Windows retains 17 known path/signal failures and nine errors; Ubuntu CI remains required.
+- Real Chrome exercised single/all 23/selected backups, duplicates, failures, Viewer denial, mobile, unchanged and changed Git revisions, and actual restart. The theme matrix captures seven pages in both themes at six viewport sizes and checks overflow and representative control contrast.
+
+## [0.24.1] - 2026-10-29
+
+### Fixed
+- Reject zero, missing, and pre-epoch backup timestamps so an absent attempt is never rendered as January 1, 1970; preserve valid positive timestamps.
+- Replace the empty device creation panel with a fail-closed explanation when CSV mappings are incomplete, including the missing Core fields and safe mapping guidance.
+- Identify non-CSV inventory sources as read-only without displaying misleading CSV migration instructions or creating a secondary inventory.
+- Remove the redundant Configuration Search sidebar item while keeping the existing top-bar search and history routes intact.
+- Refine the compact Enterprise palette, table density, mobile layouts, and configuration comparison panel sizing.
+
+### Compatibility and verification
+- Compatible target: Oxidized Core 0.37.2; Core runtime code is unchanged. Web release: 0.24.1.
+- Web Ruby suite: 124 runs / 615 assertions, 0 failures / errors, 4 skips on Windows Ruby 3.2.11. JavaScript: 14/14 passed. Focused Core RouterOS suite: 6 runs / 45 assertions passed.
+- Full Core suite has known Windows-specific path and POSIX signal failures; Linux/Ubuntu 24.04 validation was not available. Synthetic HTTPS Chrome checks covered the requested pages at six viewport sizes, with no page-level horizontal overflow or browser errors observed.
+- The RouterOS timestamp filter exists in Core 0.37.2 and its focused model-to-Git fixture checks pass. Production runtime model/Gem paths cannot be verified without server access; no Core version bump is included.
+
+## [0.24.0] - 2026-10-29
+
+### Added
+- Document the compact Oxidized Enterprise NOC design system, semantic color tokens, component density, accessibility rules, and responsive behavior.
+- Add a mobile card layout for User Management and compact Configuration History columns so controls remain readable without table panning.
+
+### Changed
+- Refine the Enterprise workspace with a 224px navy navigation rail, 56px top bar, restrained status-accent KPI cards, compact chart panels, crisp table headers, consistent controls, and clearer configuration diff panes.
+- Improve vendor legend wrapping, mobile filters and forms, dark-mode status and diff contrast, and reduced-motion handling.
+- Serve the custom stylesheet with the Web version in its URL so each release invalidates stale browser cache entries.
+- Keep data table type at readable 11px with 10px headers while reducing row and panel padding.
+
+### Fixed
+- Restore KPI label contrast after the legacy full-color card rules overrode the neutral card design; align all metric captions with their icons.
+- Prevent User Management columns and actions from clipping on 390px screens by reflowing each account as a compact card.
+- Hide secondary revision age on narrow screens so version, saved time, and download/compare actions fit in Configuration History.
+- Bound diff-pane height while allowing short comparisons to collapse to their actual content size.
+- Keep dark-mode vendor marks legible against dark surfaces.
+
+### Compatibility and verification
+- Compatible target: Oxidized Core 0.37.2 and Oxidized Web 0.24.0. Core is unchanged.
+- Windows Ruby 3.2.11: Web Minitest 120 runs / 584 assertions, 0 failures/errors, 4 platform skips; RuboCop 23 files clean; JavaScript 12/12.
+- Real Chrome captured 30 screenshots for Dashboard, Device Management, History, Diff, Login, and User Management across 1920x1080, 1440x900, 1366x768, 768x1024, and 390x844. Checked page-level horizontal overflow on authenticated pages: none observed.
+- Synthetic HTTPS browser checks verified login redirect, device create/edit/delete, diff unified/full-screen controls, dark mode, collapsed navigation, and responsive layout. Windows-only; Ubuntu 24.04/Linux verification and production deployment were not performed.
+
+## [0.23.0] - 2026-10-29
+
+### Added
+- Add Core-history-backed dashboard activity, revision timelines, and explicit last-attempt, last-stored-revision, and session-unchecked status fields that survive Core restarts.
+- Parse reliable RouterOS, IOS, NX-OS, and Junos software version strings from the latest stored configuration without initiating SSH connections.
+- Add compact overview charts, grouped/collapsible navigation, a saved desktop sidebar preference, and a mobile hamburger sidebar.
+- Add a one-time migration command for configured legacy administrator environment credentials into the session-based SQLite account store without printing secrets.
+
+### Changed
+- Cache per-request Git history and bounded firmware metadata lookups to avoid repeated per-device history queries.
+- Preserve existing `/node/show` JSON response fields while displaying durable backup metadata in the HTML detail view.
+- Compact dashboard and management controls, make vendor/model form fields align consistently, and prevent mobile top-bar horizontal overflow.
+- Show line numbers in both side-by-side and unified configuration diffs.
+- Apply revalidation headers to local CSS, JavaScript, and other static assets so visual fixes are not hidden by stale browser caches.
+
+### Fixed
+- Distinguish “Not checked this session” from “Never backed up” when Git revisions exist after an Oxidized restart.
+- Correct dashboard backup counts to derive “no saved revisions” from durable Git history instead of volatile Core runtime status.
+- Count Core `fail` and `timelimit` backup outcomes as failures instead of hiding them in the dashboard's residual status segment.
+- Include the device model in the bounded firmware metadata cache key so model changes cannot reuse a parser result from a prior model.
+- Fix the 390px viewport horizontal overflow caused by the responsive header.
+- Keep existing node-show API serialization compatible while computing additional HTML dashboard metadata.
+
+### Compatibility and verification
+- Compatible target: Oxidized Core 0.37.2 and Oxidized Web 0.23.0. Core is unchanged in this release.
+- Windows Ruby 3.2.3: Web Minitest 120 runs / 584 assertions, 0 failures/errors, 4 platform skips; RuboCop 23 files with no offenses; JavaScript 12/12.
+- Real Chrome smoke checks against synthetic local data verified login, dashboard, device management, add/edit/delete, details, history, diff, user management, dark mode, collapsed navigation, and viewport sizes 1920×1080, 1440×900, 1366×768, 1024×768, 768×1024, and 390×844. No page-level overflow was observed at 390px.
+- Windows-only execution; Ubuntu 24.04/Linux checks and production deployment have not been performed.
+
+## [0.19.0] - 2026-10-29
+
+### Added
+- Authenticated device management for mapped plaintext CSV inventories, including atomic writes, locking, rollback, and a read-only mode for unsupported sources.
+- Bulk backup, bulk deletion, CSV inventory export, and bulk group assignment for selected devices, with per-device audit records.
+- Dynamic model discovery from the installed Core and natural numeric ordering for software version strings; unavailable versions display as Unknown.
+- Administrator authorization and same-origin checks for inventory writes, source reload, and manual backup actions.
+- Core compatibility matrix and Ubuntu 24.04 build, deployment, health-check, and rollback guidance.
 - Security regression tests for XSS prevention in node name, version, diff, stats views and HTMLEntities encoding of device config content (@mattimustang, @robertcheramy)
 
 ### Changed
+- Change source reload and manual backup browser actions to POST and require administrator authentication.
+- Redact credential-like node variables from inventory and detail responses by default.
+- Preserve configured CSV comments and unrelated fields during updates, and preserve Git configuration history during Web-triggered inventory reloads.
 - Remove the no longer needed escape_once helper call in node.haml, relying on HAML's global escape_html instead (@robertcheramy)
 - Update web libraries to the latest versions (@robertcheramy)
 - Encode JSON output with the standard library instead of Sinatra's json helper (@robertcheramy)
 - Set HAML's `attr_quote` explicitly to `"` for stable output across HAML versions (@robertcheramy)
 
 ### Fixed
+- Protect format-suffixed reload routes, enforce HTTPS origins for admin writes, and reject updates that clear required model or address fields.
+- Preserve CSV owner/group/mode during atomic replacement, and expose bulk group assignment only when Core's node group field is mapped.
+- Redact API, access, secret, and credential key variables from public inventory and device responses.
+- Reject duplicate rename and stale bulk selections; roll back inventory changes when Core fails to refresh the expected node set.
 - Fix `NoMethodError` when `group=` param is absent from `/node/version/view` and `/node/version/diffs` requests. `params[:group]` was assigned directly to `@info[:group]`; `params[:group]` is now normalized to '' so the HAML templates render the no-group branch instead of crashing with a 500 (@makaiver)
 - Fix `NoMethodError` and `RegexpError` crashes on `/node/version`, `/nodes/conf_search` and in `route_parse` when params are missing or contain a malformed regex; return empty results instead of a 500 (@makaiver)
 - Fix XSS vulnerability (CWE-79) by enabling HAML's escape_html globally; user-controlled values in node names, group names, model names, and URL parameters are now HTML-escaped in all templates (@mattimustang)
+
+
+## [Unreleased]
+
+## [0.22.0] - 2026-10-29
+
+### Added
+- Add a responsive session login page, SQLite-backed account management, administrator/viewer roles, password changes, and a secure first-administrator bootstrap command.
+- Protect dashboard pages, configuration/history views, downloads, and REST endpoints behind server-side sessions; add CSRF checks, secure cookie attributes, HTTPS enforcement, trusted-proxy handling, persistent login throttling, and authentication audit events.
+
+### Changed
+- Replace environment-based HTTP Basic management authentication with local user accounts; all dashboard and API access now requires login, and Basic credentials are ignored.
+- Rate-limit failed sign-ins by resolved client address and username without a proxy-wide lockout bucket; the Nginx example overwrites forwarded client addresses.
+- Add SQLite as a runtime dependency and document authentication setup, roles, reverse proxy configuration, and rollback.
+
+### Fixed
+- Close unauthenticated access to configuration and inventory APIs, including direct URL access.
+- Prevent malformed forwarded-address headers from creating a shared reverse-proxy lockout across different users.
+- Add regression coverage for login/logout, session rotation/expiry, role checks, CSRF, HTTPS proxy validation, Basic-auth rejection, brute-force limits, disabled accounts, password changes, and secret redaction.
+- Fix the JavaScript test DOM fixture so application-shell tests can run with the counter initializer.
+
+### Compatibility
+- Compatibility target: Oxidized Core 0.37.2 and Oxidized Web 0.22.0. Core remains unchanged in this release.
+- Web suite against the local Core 0.37.2 checkout: 116 runs, 559 assertions, 0 failures/errors, 4 Windows-only skips. JavaScript suite: 11/11. Full Web RuboCop: 23 files, no offenses. Linux and browser E2E validation were not available in this environment.
+
+## [0.21.0] - 2026-10-29
+
+### Added
+- Add local vendor SVG marks for Cisco, MikroTik, Juniper, Fortinet, Palo Alto Networks, Huawei, Ubiquiti, and Dell, with generic icon fallbacks and vendor previews in add/edit forms.
+- Add configurable inventory auto-refresh, animated data-backed counters, and polished responsive dashboard, device details, and diff controls.
+- Add an explicit administration-disabled page that explains missing credentials, unsupported inventory sources, and history-safe reload requirements.
+
+### Fixed
+- Fix bulk device controls rendering inside the model `<select>`, which prevented reliable selection and submission in browsers.
+- Fix backup history failure-rate rendering when a device has no recorded runs.
+- Fix diff unified/full-screen toggles using CSS class names that did not match the stylesheet.
+- Fix device detail links for group-qualified names by resolving the full inventory identity through the existing Core node list without altering the Web JSON payload.
+- Preserve RouterOS 6 and 7 generated export timestamp comments from Git configuration output via compatible Core 0.37.2.
+
+### Compatibility
+- Compatible release target: Oxidized Core 0.37.2 and Oxidized Web 0.21.0. Both upgrades are required for history-safe inventory management and RouterOS timestamp normalization.
+- Web Ruby suite: 94 runs, 415 assertions, 0 failures/errors, 2 Windows-only skips; changed-file RuboCop clean; Web gem built successfully. Core RouterOS regression: 3 runs, 24 assertions, 0 failures/errors; changed-file RuboCop clean; Core gem built successfully.
+- Full Core suite is not green on Windows (453 runs, 17 failures, 9 errors), due Windows path normalization, unsupported POSIX signals, and Git path assumptions; full Ubuntu 24.04 validation remains required before merge/deployment.
+
+## [0.20.0] - 2026-10-29
+
+### Added
+- Add vendor and Core-model selectors, vendor/model/status filters, revision counts from stored Git history, and sortable inventory fields.
+- Add read-only viewer credentials alongside the administrator role, plus selected-device CSV export without credential fields.
+- Improve configuration history search and date sorting; add numeric version-sort regression coverage.
+
+### Changed
+- Continue using the configured Core model directory for model discovery; vendor labels are best-effort classifications and do not claim retrieval support.
+- Keep Core at 0.37.1; this release contains Web-only changes.
+
+### Known limitations
+- Local authentic vendor logo assets are not included. The UI retains a generic device glyph and vendor text because the build environment could not reach the public asset package source.
+- Ruby, Haml, gem build, and Linux validation could not be run in this Windows environment; see the compatibility matrix.
 
 
 ## [0.18.1 – 2026-01-19]

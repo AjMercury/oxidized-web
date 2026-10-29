@@ -25,6 +25,10 @@
 
 .table-card.history-card
   .table-toolbar
+    .table-search
+      %i.bi.bi-search{:'aria-hidden' => 'true'}
+      %label.visually-hidden{for: 'historySearch'} Search backup history
+      %input#historySearch{type: 'search', placeholder: 'Search revisions…'}
     %span.toolbar-label Available versions
   .table-responsive
     %table.table.table-hover.align-middle#versionsTable
@@ -43,8 +47,8 @@
               %span.version-chip v#{version_num}
               - if version_num == @data.count
                 %span.latest-chip Latest
-            %td.time{epoch: x[:time].to_i}= x[:time]
-            %td= time_from_now x[:time]
+            %td.time{epoch: x[:time].to_i, :'data-order' => x[:time].to_i}= x[:time]
+            %td{:'data-order' => x[:time].to_i}= time_from_now x[:time]
             %td.actions-cell
               - params = "node=#{@node}&group=#{@group}&oid=#{x[:oid]}"
               - params = "#{params}&epoch=#{x[:time].to_i}&num=#{version_num}"
@@ -61,7 +65,9 @@
       autoWidth: false,
       columnDefs: [{ targets: '_all', className: 'text-start' }],
       stateSave: true,
-      searching: false,
-      lengthChange: false
+      searching: true,
+      lengthChange: true,
+      lengthMenu: [10, 25, 50, { label: 'All', value: -1 }]
     });
+    $('#historySearch').on('input', function() { $('#versionsTable').DataTable().search(this.value).draw(); });
   });

@@ -1,0 +1,4 @@
+- if @current_admin == :admin
+  %button.btn.btn-primary.backup-all{type: 'button', title: 'Queue every configured device through the Core worker'}
+    %i.bi.bi-cloud-arrow-down{:'aria-hidden' => 'true'}
+    Backup All Now

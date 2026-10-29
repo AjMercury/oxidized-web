@@ -17,8 +17,12 @@ module Oxidized
       def initialize(nodes, configuration)
         require 'oxidized/web/webapp'
         @configuration = self.class.parse_configuration(configuration)
+        auth_configuration = self.class.auth_configuration
         WebApp.set :nodes, nodes
         WebApp.set :configuration, @configuration
+        WebApp.set :auth_store, UserStore.new(auth_configuration[:auth_db_path])
+        WebApp.set :auth_require_https, auth_configuration[:auth_require_https]
+        WebApp.set :trusted_proxies, auth_configuration[:trusted_proxies]
         WebApp.set :host_authorization, {
           permitted_hosts: @configuration[:vhosts]
         }
@@ -81,6 +85,14 @@ module Oxidized
           uri_prefix: normalize_uri(uri_prefix || DEFAULT_URI_PREFIX),
           vhosts: [],
           hide_node_vars: []
+        }
+      end
+
+      def self.auth_configuration
+        {
+          auth_db_path: UserStore.default_path,
+          auth_require_https: ENV.fetch('OXIDIZED_WEB_AUTH_REQUIRE_HTTPS', 'true').strip.downcase !~ /\A(?:0|false|no)\z/,
+          trusted_proxies: ENV.fetch('OXIDIZED_WEB_TRUSTED_PROXIES', '127.0.0.1,::1').split(',').map(&:strip).reject(&:empty?)
         }
       end
 

@@ -11,25 +11,48 @@
             %span.brand-copy
               %strong Oxidized
               %small Configuration manager
-        .sidebar-section-label Workspace
-        %nav.sidebar-nav
-          %a.sidebar-link{href: url_for('/nodes'),
+        %details.sidebar-nav-group{open: true}
+          %summary.sidebar-section-label Overview
+          %nav.sidebar-nav
+            %a.sidebar-link{href: url_for('/nodes'),
                           class: current_path == '/nodes' || current_path.start_with?('/nodes/group/', '/nodes/model/') ? 'active' : '',
+                          title: 'Device inventory',
                           :'aria-current' => current_path == '/nodes' || current_path.start_with?('/nodes/group/', '/nodes/model/') ? 'page' : nil}
-            %i.bi.bi-hdd-network{:'aria-hidden' => 'true'}
-            %span Device inventory
-          %a.sidebar-link{href: url_for('/nodes/stats'),
+              %i.bi.bi-hdd-network{:'aria-hidden' => 'true'}
+              %span Overview
+            %a.sidebar-link{href: url_for('/nodes#recent-changes'), title: 'Recent configuration changes'}
+              %i.bi.bi-clock-history{:'aria-hidden' => 'true'}
+              %span Recent changes
+        %details.sidebar-nav-group{open: true}
+          %summary.sidebar-section-label Backups
+          %nav.sidebar-nav
+            %a.sidebar-link{href: url_for('/nodes/stats'),
                           class: current_path == '/nodes/stats' ? 'active' : '',
+                          title: 'Backup health',
                           :'aria-current' => current_path == '/nodes/stats' ? 'page' : nil}
-            %i.bi.bi-activity{:'aria-hidden' => 'true'}
-            %span Backup health
-          %a.sidebar-link{href: '#global-config-search'}
-            %i.bi.bi-search{:'aria-hidden' => 'true'}
-            %span Configuration search
+              %i.bi.bi-activity{:'aria-hidden' => 'true'}
+              %span Backup health
+        %details.sidebar-nav-group{open: true}
+          %summary.sidebar-section-label Devices
+          %nav.sidebar-nav
+            %a.sidebar-link{href: url_for('/admin/devices'),
+                          class: current_path.start_with?('/admin/devices') ? 'active' : '',
+                          title: 'Device management',
+                          :'aria-current' => current_path.start_with?('/admin/devices') ? 'page' : nil}
+              %i.bi.bi-sliders{:'aria-hidden' => 'true'}
+              %span Device management
+            - if @current_user && @current_user[:role] == :administrator
+              %a.sidebar-link{href: url_for('/admin/users'),
+                            class: current_path.start_with?('/admin/users') ? 'active' : '',
+                            title: 'User management'}
+                %i.bi.bi-people{:'aria-hidden' => 'true'}
+                %span User management
         .sidebar-footer
           %span.status-dot{:'aria-hidden' => 'true'}
           %span Oxidized Web
           %small v.#{Oxidized::API::WEB_VERSION}
+          %button.sidebar-collapse-toggle#sidebar-collapse-toggle{type: 'button', :'aria-label' => 'Collapse sidebar', :'aria-pressed' => 'false', title: 'Collapse sidebar'}
+            %i.bi.bi-layout-sidebar-inset{:'aria-hidden' => 'true'}
 
       .app-main
         %header.app-topbar
@@ -43,13 +66,33 @@
             %span.topbar-title Configuration management
           .topbar-actions
             %form.config-search{role: 'search', action: url_for('/nodes/conf_search'), method: 'post'}
+              %input{type: 'hidden', name: 'csrf_token', value: @csrf_token}
               %label.visually-hidden{for: 'global-config-search'} Search in configurations
               %i.bi.bi-search{:'aria-hidden' => 'true'}
               %input#global-config-search{name: 'search_in_conf_textbox', type: 'search', placeholder: 'Search configurations…'}
             %button.theme-toggle#theme-toggle{type: 'button', :'aria-label' => 'Switch to dark theme', :'aria-pressed' => 'false'}
               %i.bi.bi-moon-stars{:'aria-hidden' => 'true'}
+            %details.user-menu
+              %summary{:'aria-label' => "Account menu for #{@current_user[:username]}"}
+                %i.bi.bi-person-circle{:'aria-hidden' => 'true'}
+                = @current_user[:username]
+                %i.bi.bi-chevron-down{:'aria-hidden' => 'true'}
+              .user-menu-panel
+                %a{href: url_for('/profile')} My profile / change password
+                - if @current_user[:role] == :administrator
+                  %a{href: url_for('/admin/users')} User management
+                %form{action: url_for('/logout'), method: 'post'}
+                  %input{type: 'hidden', name: 'csrf_token', value: @csrf_token}
+                  %button{type: 'submit'} Sign out
         %main.app-content#main-content
           .page-container
+            - if @current_admin == :admin
+              %section#backup-progress.table-card{hidden: true, :'aria-live' => 'polite', :'data-endpoint' => url_for('/admin/backups.json'), :'data-csrf' => @csrf_token}
+                %strong Configuration collection progress
+                %p#backup-summary
+                %progress#backup-meter{max: 1, value: 0, :'aria-label' => 'Completed configuration collections'}
+                %ul#backup-results
             != yield
+    %script{src: url_for("/scripts/backups.js?v=#{Oxidized::API::WEB_VERSION}")}
     !=haml :footer
 

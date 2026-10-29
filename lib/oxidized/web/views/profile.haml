@@ -1,0 +1,24 @@
+.page-heading
+  .page-heading-copy
+    %span.eyebrow.text-muted Account
+    %h1 My profile
+    %p Signed in as #{@current_user[:username]} (#{@current_user[:role]}).
+- if params[:password_changed]
+  .alert.alert-success{role: 'status'} Password changed successfully. Other sessions were signed out.
+- if @profile_error
+  .alert.alert-danger{role: 'alert'}= @profile_error
+.table-card.profile-card
+  %h2 Change password
+  %p Choose a unique passphrase with at least 12 characters.
+  %form{action: url_for('/profile/password'), method: 'post', autocomplete: 'off'}
+    %input{type: 'hidden', name: 'csrf_token', value: @csrf_token}
+    .mb-3
+      %label.form-label{for: 'current-password'} Current password
+      %input#current-password.form-control{name: 'current_password', type: 'password', autocomplete: 'current-password', required: true}
+    .mb-3
+      %label.form-label{for: 'new-password'} New password
+      %input#new-password.form-control{name: 'new_password', type: 'password', autocomplete: 'new-password', minlength: 12, required: true}
+    .mb-3
+      %label.form-label{for: 'new-password-confirmation'} Confirm new password
+      %input#new-password-confirmation.form-control{name: 'new_password_confirmation', type: 'password', autocomplete: 'new-password', minlength: 12, required: true}
+    %button.btn.btn-primary{type: 'submit'} Change password

@@ -1,0 +1,30 @@
+.page-heading
+  .page-heading-copy
+    %span.eyebrow.text-muted Administration
+    %h1= @user[:id] ? 'Edit user' : 'Create user'
+    %p Passwords are hashed before storage and are never displayed after saving.
+- if @form_error
+  .alert.alert-danger{role: 'alert'}= @form_error
+.table-card.profile-card
+  %form{action: url_for(@user[:id] ? "/admin/users/#{@user[:id]}" : '/admin/users'), method: 'post', autocomplete: 'off'}
+    %input{type: 'hidden', name: 'csrf_token', value: @csrf_token}
+    .mb-3
+      %label.form-label{for: 'username'} Username
+      %input#username.form-control{name: 'username', value: @user[:username], required: true, minlength: 3, maxlength: 64,
+                                    pattern: '[A-Za-z0-9._-]{3,64}', autocomplete: 'off'}
+    .mb-3
+      %label.form-label{for: 'role'} Role
+      %select#role.form-select{name: 'role'}
+        %option{value: 'administrator', selected: @user[:role].to_s == 'administrator'} Administrator
+        %option{value: 'viewer', selected: @user[:role].to_s == 'viewer'} Viewer
+    .mb-3
+      %label.form-label{for: 'password'}= @user[:id] ? 'Reset password (optional)' : 'Initial password'
+      %input#password.form-control{name: 'password', type: 'password', minlength: 12,
+                                   required: !@user[:id], autocomplete: 'new-password'}
+    - if @user[:id]
+      .form-check.mb-3
+        %input#enabled.form-check-input{name: 'enabled', type: 'checkbox', value: '1', checked: @user[:enabled]}
+        %label.form-check-label{for: 'enabled'} Account enabled
+    .device-form-actions
+      %a.btn.btn-outline-secondary{href: url_for('/admin/users')} Cancel
+      %button.btn.btn-primary{type: 'submit'} Save user
