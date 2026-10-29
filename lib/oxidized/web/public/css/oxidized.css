@@ -4029,10 +4029,25 @@ body {
   white-space: nowrap;
 }
 .actions-cell form[action*="/node/next/"] button {
+  width: auto;
+  min-width: 112px;
+  height: auto;
+  flex-shrink: 0;
   border-color: var(--ow-color-accent);
   background: var(--ow-color-accent-soft);
   color: var(--ow-color-accent);
   font-weight: 650;
+}
+.actions-cell .inline-action {
+  width: auto;
+  flex-shrink: 0;
+}
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+  max-width: none;
+  line-height: 1.4;
 }
 [data-bs-theme="dark"] .table {
   --bs-table-bg: var(--ow-color-surface);
