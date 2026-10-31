@@ -3,8 +3,8 @@
 - added_count = @stat[0].to_s == 'null' ? '—' : @stat[0]
 - removed_count = @stat[1].to_s == 'null' ? '—' : @stat[1]
 - history_node = @info[:group].to_s.empty? ? @info[:node] : "#{@info[:group]}/#{@info[:node]}"
-- history_url = url_for("/node/version?node_full=#{history_node}")
-- current_params = "node=#{@info[:node]}&group=#{@info[:group]}&oid=#{current_version[:oid]}&epoch=#{current_version[:time].to_i}&num=#{current_version[:number]}"
+- history_url = url_for("/node/version?#{Rack::Utils.build_query(node_full: history_node)}")
+- current_params = Rack::Utils.build_query(node: @info[:node], group: @info[:group], oid: current_version[:oid], epoch: current_version[:time].to_i, num: current_version[:number])
 - download_url = url_for("/node/version/view?#{current_params}&format=text")
 
 .page-heading

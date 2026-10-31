@@ -319,7 +319,7 @@ module Oxidized
           if @to_research
             nodes.list.map.each do |n|
               node, @json = route_parse n[:name]
-              config = nodes.fetch node, n[:group]
+              config = nodes.fetch(node, n[:group]).to_s.dup.force_encoding(Encoding::UTF_8).scrub
               @nodes_match.push({ node: n[:name], full_name: n[:full_name] }) if config[@to_research]
             end
           end
@@ -331,7 +331,12 @@ module Oxidized
       get '/nodes/stats.?:format?' do
         @data = {}
         nodes.each do |node|
-          @data[node.name] = node.stats
+          stats = node.stats
+          @data[node.name] = if params[:format] == 'json' && stats.respond_to?(:get)
+                               stats.get
+                             else
+                               stats
+                             end
         end
         @health_nodes = inventory_nodes
         out :stats
@@ -679,7 +684,9 @@ module Oxidized
 
       # used for diff between 2 distant commit
       post '/node/version/diffs' do
-        redirect url_for("/node/version/diffs?node=#{params[:node]}&group=#{params[:group]}&oid=#{params[:oid]}&epoch=#{params[:epoch]}&num=#{params[:num]}&oid2=#{params[:oid2]}")
+        query = Rack::Utils.build_query(node: params[:node], group: params[:group], oid: params[:oid],
+                                        epoch: params[:epoch], num: params[:num], oid2: params[:oid2])
+        redirect url_for("/node/version/diffs?#{query}")
       end
 
       # Taken von Haml 5.0, so it still works in 6.0

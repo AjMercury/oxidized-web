@@ -242,7 +242,7 @@
                   %i.bi.bi-eye{:'aria-hidden' => 'true'}
                 %a.action-link{title: 'Download current configuration', :'aria-label' => "Download configuration for #{node[:name]}", href: url_for("/node/fetch/#{node[:full_name]}")}
                   %i.bi.bi-cloud-download{:'aria-hidden' => 'true'}
-                %a.action-link{title: 'View configuration history', :'aria-label' => "View configuration history for #{node[:name]}", href: url_for("/node/version?node_full=#{node[:full_name]}")}
+                %a.action-link{title: 'View configuration history', :'aria-label' => "View configuration history for #{node[:name]}", href: url_for("/node/version?#{Rack::Utils.build_query(node_full: node[:full_name] || node[:name])}")}
                   %i.bi.bi-clock-history{:'aria-hidden' => 'true'}
                 - if @current_admin == :admin
                   %form.inline-action{action: url_for("/node/next/#{node[:full_name]}"), method: 'post'}
@@ -342,5 +342,5 @@
           %span.device-subtitle
             #{node[:model]} · #{node[:group]}
         %span.time.recent-change-time{epoch: node[:last_changed_at].to_i}= node[:last_changed_at]
-        %a.action-link{title: 'View configuration history', :'aria-label' => "View configuration history for #{node[:name]}", href: url_for("/node/version?node_full=#{node[:full_name]}")}
+        %a.action-link{title: 'View configuration history', :'aria-label' => "View configuration history for #{node[:name]}", href: url_for("/node/version?#{Rack::Utils.build_query(node_full: node[:full_name] || node[:name])}")}
           %i.bi.bi-arrow-up-right{:'aria-hidden' => 'true'}

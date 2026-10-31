@@ -56,12 +56,11 @@
             %td{:'data-order' => x[:time].to_i}= time_from_now x[:time]
             %td.author-cell{:'data-order' => author_name.to_s.downcase, title: author_email}= author_name.to_s.empty? ? 'Unknown' : author_name
             %td.actions-cell
-              - params = "node=#{@node}&group=#{@group}&oid=#{x[:oid]}"
-              - params = "#{params}&epoch=#{x[:time].to_i}&num=#{version_num}"
-              %a.action-link{title: 'Download configuration version', :'aria-label' => "Download version #{version_num} for #{@node}", href: url_for("/node/version/view?#{params}")}
+              - query = Rack::Utils.build_query(node: @node, group: @group, oid: x[:oid], epoch: x[:time].to_i, num: version_num)
+              %a.action-link{title: 'Download configuration version', :'aria-label' => "Download version #{version_num} for #{@node}", href: url_for("/node/version/view?#{query}")}
                 %i.bi.bi-cloud-download{:'aria-hidden' => 'true'}
               - if version_num > 1
-                %a.action-link{title: 'Compare with previous version', :'aria-label' => "Compare version #{version_num} for #{@node} with the previous version", href: url_for("/node/version/diffs?#{params}")}
+                %a.action-link{title: 'Compare with previous version', :'aria-label' => "Compare version #{version_num} for #{@node} with the previous version", href: url_for("/node/version/diffs?#{query}")}
                   %i.bi.bi-file-earmark-diff{:'aria-hidden' => 'true'}
 
 :javascript
