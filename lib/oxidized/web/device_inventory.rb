@@ -3,6 +3,7 @@
 require 'fileutils'
 require 'ipaddr'
 require 'securerandom'
+require 'csv'
 
 module Oxidized
   module API
@@ -41,7 +42,7 @@ module Oxidized
       end
 
       def fields
-        (@map.keys + @vars_map.keys).uniq.map(&:to_s)
+        @map.merge(@vars_map).sort_by { |field, index| [index, field.to_s] }.map { |field, _index| field.to_s }
       end
 
       def group_assignable?
@@ -57,6 +58,89 @@ module Oxidized
 
           append_row(contents, serialize_row(attrs, contents))
         end
+      end
+
+      def import_template
+        CSV.generate_line(fields)
+      end
+
+      def import_csv(contents, validate: nil, &refresh)
+        csv_contents = contents.to_s.dup.force_encoding(Encoding::UTF_8)
+        raise Error, 'The import file must use valid UTF-8 encoding.' unless csv_contents.valid_encoding?
+
+        rows = begin
+          CSV.parse(csv_contents, skip_blanks: true)
+        rescue CSV::MalformedCSVError, ArgumentError
+          raise Error, 'The import file is not valid CSV. Check its quoting and separators.'
+        end
+        headers = Array(rows.shift).map { |header| header.to_s.strip }
+        headers[0] = headers[0].delete_prefix("\uFEFF") if headers.any?
+        raise Error, 'The import file must include the downloaded CSV template header.' if headers.empty? || headers.any?(&:empty?)
+        raise Error, 'The import file contains duplicate column headers.' unless headers.uniq.length == headers.length
+
+        unsupported = headers - fields
+        raise Error, 'The import file contains columns that are not available in the current inventory template.' unless unsupported.empty?
+
+        missing = %w[name model ip] - headers
+        raise Error, "The import file is missing required columns: #{missing.join(', ')}." unless missing.empty?
+
+        raise Error, 'The import file does not contain any devices.' if rows.empty?
+        raise Error, 'The import file cannot contain more than 10000 devices.' if rows.length > 10_000
+
+        records = rows.each_with_index.map do |row, index|
+          if row.length > headers.length
+            raise Error, "Row #{index + 2}: contains more columns than the CSV template header."
+          end
+
+          attributes = headers.each_with_index.to_h { |field, column| [field.to_sym, row[column].to_s] }
+          begin
+            validated = validate_attributes(attributes, require_name: true)
+            validate&.call(validated)
+            validated
+          rescue Error => e
+            raise Error, "Row #{index + 2}: #{e.message}"
+          end
+        end
+
+        rewrite(
+          refresh: -> { refresh&.call(records.map { |record| record[:name] }) },
+          rollback_refresh: -> { refresh&.call(nil) }
+        ) do |contents|
+          raise Error.new('The configured CSV inventory file does not exist.', status: 409) unless File.file?(@path)
+
+          lines = contents.lines
+          existing_name_counts = Hash.new(0)
+          lines.each do |line|
+            next if line.match?(/^\s*#/) || line.strip.empty?
+
+            name = line.chomp.split(@delimiter, -1)[@map.fetch(:name)].to_s
+            existing_name_counts[name] += 1
+          end
+          imported_names = {}
+          records.each_with_index do |record, index|
+            name = record.fetch(:name)
+            raise Error, "Row #{index + 2}: the hostname appears more than once in the import file." if imported_names.key?(name)
+
+            existing_count = existing_name_counts[name]
+            if existing_count > 1
+              raise Error.new("Row #{index + 2}: the inventory already contains multiple records with this hostname.", status: 409)
+            elsif existing_count == 1
+              raise Error.new("Row #{index + 2}: a device with this hostname already exists.", status: 409)
+            end
+
+            imported_names[name] = true
+          end
+
+          mappings = @map.merge(@vars_map)
+          existing_width = lines.reject { |line| line.match?(/^\s*#/) || line.strip.empty? }
+                                .map { |line| line.chomp.split(@delimiter, -1).length }.max || 0
+          row_width = [(mappings.values.max || 0) + 1, existing_width].max
+          rows = records.map { |record| serialize_row(record, contents, width: row_width) }
+          ending = contents.include?("\r\n") ? "\r\n" : "\n"
+          prefix = contents.empty? || contents.end_with?("\n") ? '' : ending
+          "#{contents}#{prefix}#{rows.join(ending)}#{ending}"
+        end
+        records.length
       end
 
       def update(name, attributes, &refresh)
@@ -150,19 +234,15 @@ module Oxidized
         unsupported = values.keys - allowed
         raise Error.new("Unsupported CSV fields: #{unsupported.join(', ')}", status: 409) unless unsupported.empty?
 
+        values.each { |field, value| validate_atom!(field, value) unless value.empty? }
+
         name = values[:name]
         raise Error, 'Hostname is required.' if require_name && name.to_s.empty?
         raise Error, 'Hostname is required.' if values.has_key?(:name) && name.to_s.empty?
 
         validate_hostname(name) if name
 
-        unless values[:ip].to_s.empty?
-          validate_atom!(:ip, values[:ip])
-          validate_address(values[:ip])
-        end
-        %i[model group username password enable description].each do |key|
-          validate_atom!(key, values[key]) if values.has_key?(key) && !values[key].empty?
-        end
+        validate_address(values[:ip]) unless values[:ip].to_s.empty?
         validate_group(values[:group]) unless values[:group].to_s.empty?
         validate_input(values[:input]) unless values[:input].to_s.empty?
         %i[ssh_port telnet_port].each do |key|
@@ -236,11 +316,13 @@ module Oxidized
         indices.first
       end
 
-      def serialize_row(attributes, contents)
+      def serialize_row(attributes, contents, width: nil)
         mappings = @map.merge(@vars_map)
-        existing_lines = contents.lines.reject { |line| line.match?(/^\s*#/) || line.strip.empty? }
-        existing_width = existing_lines.map { |line| line.chomp.split(@delimiter, -1).length }.max || 0
-        width = [(mappings.values.max || 0) + 1, existing_width].max
+        unless width
+          existing_lines = contents.lines.reject { |line| line.match?(/^\s*#/) || line.strip.empty? }
+          existing_width = existing_lines.map { |line| line.chomp.split(@delimiter, -1).length }.max || 0
+          width = [(mappings.values.max || 0) + 1, existing_width].max
+        end
         columns = Array.new(width, '')
         mappings.each do |key, index|
           columns[index] = attributes[key].to_s if attributes.has_key?(key)
@@ -272,7 +354,7 @@ module Oxidized
         "#{contents}#{prefix}#{row}#{ending}"
       end
 
-      def rewrite(refresh:)
+      def rewrite(refresh:, rollback_refresh: refresh)
         raise Error.new('The configured CSV inventory file is not writable.', status: 409) unless File.file?(@path) && File.writable?(@path)
         raise Error.new('A symbolic link cannot be modified through device management.', status: 409) if File.symlink?(@path)
 
@@ -289,7 +371,7 @@ module Oxidized
           rescue StandardError => e
             atomic_write(original)
             begin
-              refresh&.call
+              rollback_refresh&.call
             rescue StandardError => rollback_error
               raise Error.new("Inventory update was rolled back, but Core could not restore its in-memory inventory: #{rollback_error.class}.", status: 500)
             end

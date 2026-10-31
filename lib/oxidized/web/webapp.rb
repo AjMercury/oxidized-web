@@ -18,6 +18,7 @@ module Oxidized
       VERSION_CACHE_LOCK = Mutex.new
       VERSION_CACHE = {} # rubocop:disable Style/MutableConstant
       MAX_RECENT_CHANGES = 100
+      MAX_DEVICE_IMPORT_BYTES = 5 * 1024 * 1024
 
       helpers Sinatra::UrlForHelper
       set :public_folder, proc { File.join(root, 'public') }
@@ -363,6 +364,53 @@ module Oxidized
         @models = available_models
         @data = inventory_nodes
         haml :devices, layout: true
+      end
+
+      get '/admin/devices/import-template.csv' do
+        require_administrator!
+        inventory = DeviceInventory.new(nodes, Oxidized.config)
+        content_type 'text/csv; charset=utf-8'
+        headers['Content-Disposition'] = 'attachment; filename="oxidized-devices-import-template.csv"'
+        inventory.import_template
+      rescue DeviceInventory::Error => e
+        halt e.status, e.message
+      end
+
+      post '/admin/devices/import.?:format?' do
+        require_administrator!
+        upload = params['file']
+        unless upload.respond_to?(:tempfile) && upload.respond_to?(:filename)
+          raise DeviceInventory::Error, 'Choose a CSV file to import.'
+        end
+        unless File.extname(upload.filename.to_s).casecmp('.csv').zero?
+          raise DeviceInventory::Error, 'Choose a file with the .csv extension.'
+        end
+
+        tempfile = upload.tempfile
+        raise DeviceInventory::Error, 'The import file cannot be larger than 5 MB.' if tempfile.size > MAX_DEVICE_IMPORT_BYTES
+
+        tempfile.rewind
+        contents = tempfile.read(MAX_DEVICE_IMPORT_BYTES + 1)
+        raise DeviceInventory::Error, 'The import file cannot be larger than 5 MB.' if contents.bytesize > MAX_DEVICE_IMPORT_BYTES
+
+        inventory = DeviceInventory.new(nodes, Oxidized.config)
+        count = inventory.import_csv(contents, validate: ->(attributes) { validate_model!(attributes[:model]) }) do |names|
+          reload_inventory_safely!(expected: names)
+        end
+        audit_admin!('bulk_import', "#{count} devices")
+
+        if params[:format] == 'json' || request.media_type == 'application/json'
+          status 201
+          content_type :json
+          JSON.generate(status: 'ok', action: 'imported', count: count)
+        else
+          redirect url_for('/admin/devices?notice=imported')
+        end
+      rescue DeviceInventory::Error => e
+        admin_error_response(e.message, e.status)
+      rescue StandardError => e
+        logger.error("Bulk device import failed (#{e.class})")
+        admin_error_response('Devices could not be imported. Check the Oxidized logs for details.', 500)
       end
 
       post '/admin/devices/bulk.?:format?' do
@@ -880,9 +928,10 @@ module Oxidized
 
         nodes.load(nil, clean_obsolete: false)
         current_names = nodes.list.map { |node| node[:name].to_s }
-        if expected && current_names.index(expected.to_s).nil?
+        missing_names = expected && (Array(expected).map(&:to_s) - current_names)
+        if missing_names && !missing_names.empty?
           raise DeviceInventory::Error.new(
-            'Core reloaded the inventory but did not load the requested device. The CSV change was rolled back.',
+            'Core reloaded the inventory but did not load every requested device. The CSV change was rolled back.',
             status: 422
           )
         end

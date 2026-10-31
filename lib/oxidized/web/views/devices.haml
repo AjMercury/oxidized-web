@@ -8,7 +8,9 @@
 - missing_inventory_fields = [] if @inventory_error && !@inventory_mapping_error
 - mapping_incomplete = @inventory_mapping_error || (@inventory_error.nil? && missing_inventory_fields.any?)
 
-- if params[:notice]
+- if params[:notice] == 'imported'
+  .alert.alert-success{role: 'status'} Devices imported successfully.
+- elsif params[:notice]
   .alert.alert-success{role: 'status'} Device #{params[:notice]} successfully.
 - if @inventory_error || mapping_incomplete
   .alert.alert-warning.inventory-source-alert{role: 'status'}
@@ -70,6 +72,28 @@
         %button.btn.btn-primary{type: 'submit', disabled: !%w[name model ip].all? { |field| @device_fields.include?(field) }}
           %i.bi.bi-plus-lg{:'aria-hidden' => 'true'}
           Add device
+
+- if @current_admin != :viewer && @inventory_error.nil? && !mapping_incomplete
+  .section-heading
+    .section-heading-copy
+      %h2 Bulk add
+      %p Import multiple devices from a CSV file using the current inventory fields.
+  .table-card.device-form-card.bulk-import-card
+    .bulk-import-guidance
+      %p.mb-2 Download the template, keep its column names, and add one device per row.
+      %p.text-muted.mb-3 Required columns: name, model, ip. Optional fields are available in the template.
+      %a.btn.btn-outline-secondary.btn-sm{href: url_for('/admin/devices/import-template.csv')}
+        %i.bi.bi-file-earmark-arrow-down{:'aria-hidden' => 'true'}
+        Download CSV template
+    %form{action: url_for('/admin/devices/import'), method: 'post', enctype: 'multipart/form-data', autocomplete: 'off', :'data-loading-label' => 'Importing devices…'}
+      %input{type: 'hidden', name: 'csrf_token', value: @csrf_token}
+      .device-form-actions
+        .flex-grow-1
+          %label.form-label{for: 'device-import-file'} CSV file
+          %input#device-import-file.form-control{type: 'file', name: 'file', accept: '.csv,text/csv', required: true}
+        %button.btn.btn-primary.align-self-end{type: 'submit'}
+          %i.bi.bi-cloud-arrow-up{:'aria-hidden' => 'true'}
+          Import devices
 
 .section-heading
   .section-heading-copy
