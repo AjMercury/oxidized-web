@@ -95,4 +95,18 @@ describe Oxidized::API::Web do
       end
     end
   end
+
+  describe '#queue_initial_backups' do
+    it 'queues all devices once when the web service starts' do
+      nodes = mock('Core node queue')
+      nodes.expects(:queue_backups).once.with(nil).returns([])
+      web = Oxidized::API::Web.allocate
+      web.instance_variable_set(:@nodes, nodes)
+      web.instance_variable_set(:@initial_backups_queued, false)
+      web.instance_variable_set(:@initial_backup_lock, Mutex.new)
+
+      web.send(:queue_initial_backups)
+      web.send(:queue_initial_backups)
+    end
+  end
 end

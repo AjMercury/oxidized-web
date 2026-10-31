@@ -16,6 +16,9 @@ module Oxidized
 
       def initialize(nodes, configuration)
         require 'oxidized/web/webapp'
+        @nodes = nodes
+        @initial_backups_queued = false
+        @initial_backup_lock = Mutex.new
         @configuration = self.class.parse_configuration(configuration)
         auth_configuration = self.class.auth_configuration
         WebApp.set :nodes, nodes
@@ -36,6 +39,7 @@ module Oxidized
 
       def run
         @thread = Thread.new do
+          queue_initial_backups
           @server = Puma::Server.new @app
           addr = @configuration[:addr]
           port = @configuration[:port]
@@ -100,6 +104,24 @@ module Oxidized
         return '/' if uri_prefix.empty?
 
         uri_prefix.start_with?('/') ? uri_prefix : "/#{uri_prefix}"
+      end
+
+      private
+
+      def queue_initial_backups
+        @initial_backup_lock.synchronize do
+          return if @initial_backups_queued
+
+          if @nodes.respond_to?(:queue_backups)
+            @nodes.queue_backups(nil)
+          else
+            @nodes.list.each { |node| @nodes.next(node[:name]) }
+          end
+          @initial_backups_queued = true
+        end
+        logger.info 'Queued initial backups for all devices'
+      rescue StandardError => e
+        logger.error "Unable to queue initial backups at startup: #{e.class}: #{e.message}"
       end
     end
   end
