@@ -37,18 +37,24 @@
           %th Version
           %th Saved at
           %th Age
+          %th Author
           %th Actions
       %tbody
         - nb = @data.count + 1
         - @data.each do |x|
           - version_num = nb -= 1
+          - revision_author = x[:author] || x['author']
+          - author_name = revision_author.is_a?(Hash) ? (revision_author[:name] || revision_author['name']) : revision_author
+          - author_email = revision_author.is_a?(Hash) ? (revision_author[:email] || revision_author['email']) : nil
           %tr
-            %td.version-number
-              %span.version-chip v#{version_num}
-              - if version_num == @data.count
-                %span.latest-chip Latest
+            %td{:'data-order' => version_num}
+              .version-number
+                %span.version-chip v#{version_num}
+                - if version_num == @data.count
+                  %span.latest-chip Latest
             %td.time{epoch: x[:time].to_i, :'data-order' => x[:time].to_i}= x[:time]
             %td{:'data-order' => x[:time].to_i}= time_from_now x[:time]
+            %td.author-cell{:'data-order' => author_name.to_s.downcase, title: author_email}= author_name.to_s.empty? ? 'Unknown' : author_name
             %td.actions-cell
               - params = "node=#{@node}&group=#{@group}&oid=#{x[:oid]}"
               - params = "#{params}&epoch=#{x[:time].to_i}&num=#{version_num}"
@@ -67,7 +73,8 @@
       stateSave: true,
       searching: true,
       lengthChange: true,
-      lengthMenu: [10, 25, 50, { label: 'All', value: -1 }]
+      lengthMenu: [10, 25, 50, { label: 'All', value: -1 }],
+      stateLoadParams: function(_settings, state) { state.order = [[0, 'desc']]; }
     });
     $('#historySearch').on('input', function() { $('#versionsTable').DataTable().search(this.value).draw(); });
   });

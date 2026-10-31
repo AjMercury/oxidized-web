@@ -8,6 +8,12 @@ test('restored completed selection keeps polling another active device until its
   const handlers = {};
   const timers = [];
   const button = { setAttribute() {} };
+  const statusPill = { className: 'status-pill status-never', textContent: 'never', title: 'never' };
+  const statusCell = { querySelector: () => statusPill };
+  const dashboardRow = {
+    dataset: { deviceName: 'stale-name', fullName: 'group/busy' },
+    querySelector: () => statusCell
+  };
   const elements = {
     'backup-progress': { dataset: { endpoint: '/admin/backups.json', csrf: 'synthetic' }, hidden: true },
     'backup-summary': {},
@@ -15,14 +21,15 @@ test('restored completed selection keeps polling another active device until its
     'backup-results': { replaceChildren() {}, appendChild() {} }
   };
   const batches = [
-    [{ name: 'done', state: 'succeeded' }, { name: 'busy', state: 'running' }],
-    [{ name: 'done', state: 'succeeded' }, { name: 'busy', state: 'succeeded' }]
+    [{ name: 'done', state: 'succeeded' }, { name: 'busy', full_name: 'group/busy', state: 'running' }],
+    [{ name: 'done', state: 'succeeded' }, { name: 'busy', full_name: 'group/busy', state: 'succeeded' }]
   ];
   const document = {
     addEventListener(name, handler) { handlers[name] = handler; },
     getElementById(id) { return elements[id] || null; },
     createElement() { return {}; },
     querySelectorAll(selector) {
+      if (selector === '#nodesTable tbody tr') return [dashboardRow];
       return selector.startsWith('form[') ? [{ action: '/node/next/busy', querySelector: () => button }] : [];
     }
   };
@@ -35,8 +42,12 @@ test('restored completed selection keeps polling another active device until its
   handlers.DOMContentLoaded();
   await new Promise(setImmediate);
   assert.equal(button.disabled, true);
+  assert.equal(statusPill.className, 'status-pill status-running');
+  assert.equal(statusPill.textContent, 'running');
   assert.equal(timers.length, 1);
   await timers.shift()();
   assert.equal(button.disabled, false);
+  assert.equal(statusPill.className, 'status-pill status-success');
+  assert.equal(statusPill.textContent, 'success');
   assert.equal(timers.length, 0);
 });

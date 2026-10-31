@@ -91,6 +91,7 @@ describe Oxidized::API::WebApp do
       _(body).must_include('Backup coverage')
       _(body).must_include('completed attempts this session')
       _(body).must_include('State per device; Core resets it on restart')
+      _(body).wont_include('Delete device')
     end
 
     it 'counts Core failure and timelimit results as failed attempts' do

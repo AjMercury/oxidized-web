@@ -28,6 +28,8 @@ describe Oxidized::API::WebApp do
       get '/node/version?node_full=sw5'
       _(last_response.ok?).must_equal true
       _(last_response.body).must_include('<span class="version-chip">v3</span>')
+      _(last_response.body).must_include('<td data-order="3"><div class="version-number">')
+      _(last_response.body).must_include("stateLoadParams: function(_settings, state) { state.order = [[0, 'desc']]; }")
       _(last_response.body).must_include(
         "<td class=\"time\" data-order=\"1738781340\" epoch=\"1738781340\">2025-02-05 19:49:00 +0100</td>"
       )
@@ -67,6 +69,25 @@ describe Oxidized::API::WebApp do
       _(last_response.body).must_include(
         'href="/node/version/diffs?node=sw5&amp;group=group1&amp;oid=C006&amp;epoch=1738781340&amp;num=3"'
       )
+    end
+
+    it 'shows the Git author for each revision and falls back when author metadata is absent' do
+      revisions = [
+        { oid: 'C006', time: Time.parse('2025-02-05 19:49:00 +0100'),
+          author: { name: 'Device <Operator>', email: 'operator@example.net" onclick="alert(1)' } },
+        { oid: 'C003', time: Time.parse('2025-02-05 19:03:00 +0100'), 'author' => { 'name' => 'Legacy Operator' } },
+        { oid: 'C001', time: Time.parse('2025-02-05 19:01:00 +0100') }
+      ]
+      @nodes.expects(:version).with('sw5', nil).returns(revisions)
+
+      get '/node/version?node_full=sw5'
+
+      _(last_response.ok?).must_equal true
+      _(last_response.body).must_include('<th>Author</th>')
+      _(last_response.body).must_include('Device &lt;Operator&gt;')
+      _(last_response.body).must_include('title="operator@example.net&quot; onclick=&quot;alert(1)"')
+      _(last_response.body).must_include('>Legacy Operator</td>')
+      _(last_response.body).must_match(%r{<td class="author-cell"[^>]*>Unknown</td>})
     end
 
     it 'fetches all versions of a node with a group with /' do

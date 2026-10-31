@@ -106,6 +106,7 @@ describe 'administrator device management' do
     _(last_response.body).must_include('id="managedGroupFilter"')
     _(last_response.body).must_include('id="managedStatusFilter"')
     _(last_response.body).must_include('id="bulkDevices"')
+    _(last_response.body).must_include('Delete selected')
   end
 
   it 'explains an incomplete CSV mapping instead of rendering an empty Add Device form' do

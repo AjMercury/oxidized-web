@@ -100,6 +100,7 @@ describe Oxidized::API::WebApp do
       _(last_response.body).must_include('192.0.2.5')
       _(last_response.body).must_include('IOS XE 17.9')
       _(last_response.body).must_include('/node/version?node_full=group1/sw5')
+      _(last_response.body).wont_include('Delete')
     end
 
     it 'redacts sensitive metadata and separates attempt, revision, and change timestamps' do

@@ -212,7 +212,7 @@
           %th Actions
       %tbody
         - @data.sort_by { |node| node[:name].to_s.downcase }.each do |node|
-          %tr
+          %tr{:'data-device-name' => node[:name], :'data-full-name' => node[:full_name]}
             %td.device-cell
               %a.device-name{href: url_for("/node/show/#{node[:name]}")}= node[:name]
               %span.device-subtitle= node[:full_name] unless node[:full_name] == node[:name]
@@ -231,7 +231,7 @@
             %td.text-end{:'data-order' => node[:revision_count].nil? ? -1 : node[:revision_count]}= node[:revision_count].nil? ? 'Unknown' : node[:revision_count]
             %td
               %a.group-link{href: url_for("/nodes/group/#{node[:group]}")}= node[:group]
-            %td
+            %td{:'data-session-status' => true}
               - state_label = node[:backup_state].to_s.tr('_', ' ')
               %span{title: state_label, class: "status-pill status-#{node[:backup_state]}"}= state_label
             %td.time.text-nowrap{epoch: node[:time] && node[:time] != 'never' ? node[:time].to_i : '', :'data-order' => node[:time] && node[:time] != 'never' ? node[:time].to_i : 0}= node[:time]
@@ -252,10 +252,6 @@
                 - if @management_error.nil?
                   %a.action-link{title: 'Edit device', :'aria-label' => "Edit #{node[:name]}", href: url_for("/admin/devices/#{node[:name]}/edit")}
                     %i.bi.bi-pencil-square{:'aria-hidden' => 'true'}
-                  %form.inline-action{action: url_for("/admin/devices/#{node[:name]}/delete"), method: 'post', onsubmit: "return confirm('Delete this device from the configured inventory? Git backup history will be retained.')"}
-                    %input{type: 'hidden', name: 'csrf_token', value: @csrf_token}
-                    %button.action-link.action-delete{title: 'Delete device', :'aria-label' => "Delete #{node[:name]} from inventory", type: 'submit'}
-                      %i.bi.bi-trash{:'aria-hidden' => 'true'}
 
 .section-heading.activity-heading
   .section-heading-copy
